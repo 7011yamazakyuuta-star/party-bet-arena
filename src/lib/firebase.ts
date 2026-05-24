@@ -1,4 +1,5 @@
 import type { Room } from "./types";
+import { normalizeRoom } from "./storage";
 
 type SyncCallback = (room: Room) => void;
 
@@ -27,7 +28,7 @@ export async function subscribeFirebaseRoom(roomId: string, callback: SyncCallba
   const db = getDatabase(app);
   return onValue(ref(db, `rooms/${roomId}`), (snapshot) => {
     const value = snapshot.val() as Room | null;
-    if (value) callback(value);
+    if (value) callback(normalizeRoom(value));
   });
 }
 

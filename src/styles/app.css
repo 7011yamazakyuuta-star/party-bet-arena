@@ -30,6 +30,20 @@
   --warn: #ffd95c;
 }
 
+:root[data-theme="party"] {
+  --bg: #12351e;
+  --surface: rgba(249, 255, 241, 0.9);
+  --surface-strong: rgba(255, 255, 252, 0.96);
+  --line: rgba(28, 82, 39, 0.18);
+  --line-strong: rgba(42, 188, 75, 0.62);
+  --text: #243028;
+  --muted: #607565;
+  --accent: #25bf45;
+  --accent-2: #3568ff;
+  --warn: #f2c114;
+  --danger: #ff4c69;
+}
+
 :root[data-theme="minimal"] {
   --bg: #0b1118;
   --surface: rgba(22, 29, 38, 0.82);
@@ -48,6 +62,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100dvh;
+  color: var(--text);
   overflow-x: hidden;
 }
 
@@ -72,6 +87,19 @@ button {
     var(--bg);
 }
 
+:root[data-theme="party"] .app-shell {
+  background:
+    radial-gradient(circle at 20% 4%, rgba(255, 76, 105, 0.18), transparent 28%),
+    radial-gradient(circle at 82% 8%, rgba(53, 104, 255, 0.18), transparent 30%),
+    linear-gradient(135deg, #efffd8 0%, #97e76b 42%, #f6ffe8 100%);
+}
+
+:root[data-theme="party"] .phone-frame {
+  background:
+    radial-gradient(circle at 12px 12px, rgba(36, 48, 40, 0.06) 2px, transparent 3px) 0 0 / 22px 22px,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(221, 255, 206, 0.82));
+}
+
 .phone-frame {
   position: relative;
   width: min(100vw, 430px);
@@ -81,6 +109,7 @@ button {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 18%),
     var(--bg);
+  color: var(--text);
   box-shadow: var(--shadow);
 }
 
@@ -673,9 +702,20 @@ select option {
   color: var(--accent);
 }
 
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-grid .wide {
+  grid-column: 1 / -1;
+}
+
 .inline-form {
   display: grid;
-  grid-template-columns: 1fr auto 46px;
+  grid-template-columns: minmax(0, 1fr) 70px 82px 72px 46px;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -703,6 +743,16 @@ select option {
   min-height: 16px;
 }
 
+.toggle-label.compact {
+  min-width: 64px;
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.small-input {
+  width: 70px;
+}
+
 .odds-input {
   width: 82px;
 }
@@ -727,7 +777,7 @@ select option {
 .mini-player .avatar {
   width: 36px;
   height: 36px;
-  grid-row: span 2;
+  grid-row: span 3;
 }
 
 .mini-player strong {
@@ -740,6 +790,13 @@ select option {
 .mini-player span:last-child {
   color: var(--muted);
   font-size: 12px;
+}
+
+.mini-player input[type="range"] {
+  grid-column: 2;
+  width: 100%;
+  min-height: 28px;
+  padding: 0;
 }
 
 .odds-row,
@@ -756,6 +813,20 @@ select option {
   grid-template-columns: 42px 1fr 86px;
 }
 
+.odds-row.expanded {
+  grid-template-columns: 42px minmax(70px, 1fr) 58px 52px 44px 64px;
+}
+
+.odds-row label {
+  gap: 4px;
+  font-size: 11px;
+}
+
+.odds-row label input {
+  min-height: 38px;
+  padding: 0 8px;
+}
+
 .odds-row input {
   text-align: right;
 }
@@ -768,6 +839,34 @@ select option {
 .bet-log-row em {
   color: var(--accent);
   font-style: normal;
+}
+
+.order-ticket {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.order-ticket div {
+  min-height: 58px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.order-ticket span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.order-ticket strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .result-picks {
@@ -878,6 +977,27 @@ select option {
   }
 }
 
+@media (min-width: 760px) {
+  .phone-frame {
+    width: min(720px, calc(100vw - 48px));
+  }
+
+  .bottom-nav {
+    width: min(684px, calc(100vw - 72px));
+  }
+
+  .screen-stack {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .race-hero,
+  .leader-preview.full,
+  .result-summary,
+  .sticky-action {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 370px) {
   .phone-frame {
     padding-left: 12px;
@@ -896,6 +1016,31 @@ select option {
 
   .quick-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .inline-form,
+  .settings-grid,
+  .player-grid,
+  .result-picks {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-form button {
+    width: 100%;
+  }
+
+  .small-input,
+  .odds-input {
+    width: 100%;
+  }
+
+  .odds-row.expanded {
+    grid-template-columns: 42px 1fr;
+  }
+
+  .odds-row.expanded > input,
+  .odds-row.expanded > label {
+    grid-column: 1 / -1;
   }
 
   .contestant {

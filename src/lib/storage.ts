@@ -14,14 +14,14 @@ export function loadRoom() {
   if (!stored) return createInitialRoom();
 
   try {
-    return JSON.parse(stored) as Room;
+    return normalizeRoom(JSON.parse(stored) as Room);
   } catch {
     return createInitialRoom();
   }
 }
 
 export function saveRoom(room: Room) {
-  localStorage.setItem(roomKey, JSON.stringify({ ...room, updatedAt: Date.now() }));
+  localStorage.setItem(roomKey, JSON.stringify({ ...normalizeRoom(room), updatedAt: Date.now() }));
 }
 
 export function loadSession(): LocalSession {
@@ -43,4 +43,39 @@ export function resetLocalRoom() {
   const room = createInitialRoom();
   saveRoom(room);
   return room;
+}
+
+export function normalizeRoom(room: Room): Room {
+  const fallback = createInitialRoom();
+
+  return {
+    ...fallback,
+    ...room,
+    theme: room.theme ?? fallback.theme,
+    settings: {
+      ...fallback.settings,
+      ...room.settings,
+      maxPlayers: Math.min(8, Math.max(1, room.settings?.maxPlayers ?? fallback.settings.maxPlayers)),
+      maxContestants: Math.min(8, Math.max(1, room.settings?.maxContestants ?? fallback.settings.maxContestants)),
+    },
+    players: (room.players ?? fallback.players).map((player, index) => ({
+      ...player,
+      skillRating: player.skillRating ?? Math.max(1, Math.min(9, 5 + index)),
+    })),
+    contestants: (room.contestants ?? fallback.contestants).map((contestant, index) => ({
+      ...contestant,
+      strengthRating: contestant.strengthRating ?? Math.max(1, 9 - index),
+      cpuLevel: contestant.cpuLevel ?? Math.max(1, 9 - index),
+      isCpu: contestant.isCpu ?? index > 0,
+    })),
+    currentRace: {
+      ...fallback.currentRace,
+      ...room.currentRace,
+      bets: (room.currentRace?.bets ?? []).map((bet) => ({
+        ...bet,
+        contestantIds: bet.contestantIds?.length ? bet.contestantIds : [bet.contestantId],
+      })),
+      resultIds: room.currentRace?.resultIds ?? [],
+    },
+  };
 }

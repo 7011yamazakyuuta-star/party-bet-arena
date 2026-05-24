@@ -1,7 +1,13 @@
-export type BetType = "win" | "place";
+export type BetType = "win" | "place" | "exacta" | "trifecta";
 export type RaceStatus = "setup" | "betting" | "closed" | "settled";
-export type ThemeName = "neon" | "pop" | "minimal";
+export type ThemeName = "neon" | "pop" | "minimal" | "party";
 export type AppRole = "host" | "player";
+
+export type RoomSettings = {
+  maxPlayers: number;
+  maxContestants: number;
+  autoOdds: boolean;
+};
 
 export type Player = {
   id: string;
@@ -9,6 +15,7 @@ export type Player = {
   balance: number;
   isOffline: boolean;
   accent: string;
+  skillRating: number;
 };
 
 export type Contestant = {
@@ -17,12 +24,16 @@ export type Contestant = {
   odds: number;
   accent: string;
   icon: string;
+  strengthRating: number;
+  cpuLevel: number;
+  isCpu: boolean;
 };
 
 export type Bet = {
   id: string;
   playerId: string;
   contestantId: string;
+  contestantIds: string[];
   type: BetType;
   amount: number;
   placedBy: "self" | "host";
@@ -46,6 +57,7 @@ export type Room = {
   hostPin: string;
   theme: ThemeName;
   startingBalance: number;
+  settings: RoomSettings;
   players: Player[];
   contestants: Contestant[];
   currentRace: Race;
@@ -56,6 +68,7 @@ export type Room = {
 export type DraftBet = {
   playerId: string;
   contestantId: string;
+  contestantIds: string[];
   type: BetType;
   amount: number;
   placedBy: "self" | "host";
