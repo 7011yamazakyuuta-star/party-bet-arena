@@ -100,6 +100,31 @@ button {
     linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(221, 255, 206, 0.82));
 }
 
+:root[data-theme="party"] .primary-button {
+  color: #ffffff;
+  background: linear-gradient(135deg, #25bf45, #3568ff);
+  box-shadow: 0 14px 30px rgba(37, 191, 69, 0.18);
+}
+
+:root[data-theme="party"] .race-hero {
+  background:
+    radial-gradient(circle at 88% 18%, rgba(242, 193, 20, 0.26), transparent 24%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(206, 250, 190, 0.82));
+}
+
+:root[data-theme="party"] .bottom-nav {
+  background: rgba(34, 45, 66, 0.94);
+}
+
+:root[data-theme="party"] .bottom-nav button {
+  color: #a8b49f;
+}
+
+:root[data-theme="party"] .bottom-nav button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #25bf45, #1a9869);
+}
+
 .phone-frame {
   position: relative;
   width: min(100vw, 430px);
@@ -246,6 +271,8 @@ h2 {
 .join-panel,
 .race-hero,
 .leader-preview,
+.guide-panel,
+.share-card,
 .proxy-strip,
 .balance-banner,
 .amount-panel,
@@ -363,6 +390,8 @@ h2 {
 
 .leader-preview,
 .join-panel,
+.guide-panel,
+.share-card,
 .proxy-strip,
 .amount-panel,
 .payout-preview,
@@ -442,6 +471,61 @@ h2 {
 
 .action-row {
   gap: 8px;
+}
+
+.guide-panel,
+.share-card {
+  position: relative;
+}
+
+.guide-steps {
+  display: grid;
+  grid-template-columns: 34px 76px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.guide-steps span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  font-weight: 900;
+}
+
+.guide-steps strong {
+  font-size: 14px;
+}
+
+.guide-steps p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.share-card {
+  display: grid;
+  gap: 10px;
+}
+
+.share-card div {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.share-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.share-card strong {
+  overflow-wrap: anywhere;
 }
 
 .primary-button,
@@ -689,6 +773,10 @@ select option {
 
 .theme-row {
   gap: 8px;
+}
+
+.room-name-field {
+  margin-bottom: 12px;
 }
 
 .theme-button {

@@ -40,7 +40,7 @@ import {
   validateBet,
 } from "./lib/calculations";
 import { createBlankRoom } from "./lib/sample";
-import { isFirebaseConfigured, saveFirebaseRoom, subscribeFirebaseRoom } from "./lib/firebase";
+import { fetchFirebaseRoom, isFirebaseConfigured, saveFirebaseRoom, subscribeFirebaseRoom } from "./lib/firebase";
 import { loadRoom, loadSession, resetLocalRoom, saveRoom, saveSession } from "./lib/storage";
 import type { BetType, DraftBet, Player, Room, ThemeName } from "./lib/types";
 
@@ -147,6 +147,7 @@ function App() {
   };
   const potentialPayout = getPotentialPayout(room, draftBet);
   const timeLeft = formatTime(room.currentRace.endsAt - tick);
+  const publicUrl = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname;
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
     return contestant && contestant.odds >= 4 && isBetHit(bet.type, getBetPickIds(bet), room.currentRace.resultIds);
@@ -172,7 +173,7 @@ function App() {
   }
 
   function handleCreateRoom() {
-    const next = createBlankRoom("みんなBET Arena");
+    const next = createBlankRoom("新しい勝負");
     commitRoom(next);
     setSession({ role: "host" });
     setProxyPlayerId(next.players[0]?.id ?? "");
@@ -182,37 +183,62 @@ function App() {
     showToast("新しいルームを作成しました。");
   }
 
-  function handleJoinPlayer() {
+  async function handleJoinPlayer() {
     const normalizedRoomId = joinRoomId.trim().toUpperCase();
-    if (normalizedRoomId !== room.id || joinCode.trim() !== room.joinCode) {
+    let targetRoom = room;
+
+    if (normalizedRoomId !== room.id) {
+      const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
+      if (!remoteRoom) {
+        showToast("ルームが見つかりません。Room IDを確認してください。");
+        return;
+      }
+      targetRoom = remoteRoom;
+    }
+
+    if (normalizedRoomId !== targetRoom.id || joinCode.trim() !== targetRoom.joinCode) {
       showToast("ルームIDまたは参加コードが違います。");
       return;
     }
 
-    const name = joinName.trim() || `Player ${room.players.length + 1}`;
-    if (room.players.length >= room.settings.maxPlayers) {
-      showToast(`賭ける人は最大${room.settings.maxPlayers}人までです。`);
+    const name = joinName.trim() || `Player ${targetRoom.players.length + 1}`;
+    if (targetRoom.players.length >= targetRoom.settings.maxPlayers) {
+      showToast(`賭ける人は最大${targetRoom.settings.maxPlayers}人までです。`);
       return;
     }
 
     const player: Player = {
       id: crypto.randomUUID(),
       name,
-      balance: room.startingBalance,
+      balance: targetRoom.startingBalance,
       isOffline: false,
-      accent: ["#55f3ec", "#9d7cff", "#ffcf5b", "#ff8f70"][room.players.length % 4],
+      accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][targetRoom.players.length % 4],
       skillRating: 5,
     };
 
     const next = {
-      ...room,
-      players: [...room.players, player],
+      ...targetRoom,
+      players: [...targetRoom.players, player],
       updatedAt: Date.now(),
     };
     commitRoom(next);
     setSession({ role: "player", playerId: player.id });
     setTab("bet");
     showToast(`${name}で参加しました。`);
+  }
+
+  function handleRoomNameChange(name: string) {
+    updateRoom((current) => ({ ...current, name: name || "新しい勝負", updatedAt: Date.now() }));
+  }
+
+  async function handleCopyInvite() {
+    const text = `Party Bet Arena\nURL: ${publicUrl}\nRoom ID: ${room.id}\n参加コード: ${room.joinCode}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("招待情報をコピーしました。");
+    } catch {
+      showToast("コピーできませんでした。URLとRoom IDを手動で共有してください。");
+    }
   }
 
   function handlePlaceBet() {
@@ -468,9 +494,9 @@ function App() {
             <strong>{room.joinCode}</strong>
           </div>
           <div>
-            <span>{isFirebaseConfigured ? "Sync" : "Local"}</span>
+            <span>{room.isDemo ? "Mode" : isFirebaseConfigured ? "Sync" : "Local"}</span>
             <strong className={isFirebaseConfigured ? "online" : ""}>
-              {isFirebaseConfigured ? "Firebase" : "Demo"}
+              {room.isDemo ? "Demo" : isFirebaseConfigured ? "Firebase" : "Local"}
             </strong>
           </div>
         </section>
@@ -493,9 +519,11 @@ function App() {
                 ranking={ranking}
                 timeLeft={timeLeft}
                 hasJackpot={hasJackpot}
+                publicUrl={publicUrl}
                 onCreateRoom={handleCreateRoom}
                 onBetTab={() => setTab("bet")}
                 onResetDemo={handleResetDemo}
+                onCopyInvite={handleCopyInvite}
               />
             )}
 
@@ -544,6 +572,7 @@ function App() {
                 onAddContestant={handleAddContestant}
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
+                onRoomNameChange={handleRoomNameChange}
                 onPlayerSkillChange={handlePlayerSkillChange}
                 onContestantStrengthChange={handleContestantStrengthChange}
                 onSettingChange={handleSettingChange}
@@ -618,9 +647,11 @@ function HomeView(props: {
   ranking: Player[];
   timeLeft: string;
   hasJackpot: boolean;
+  publicUrl: string;
   onCreateRoom: () => void;
   onBetTab: () => void;
   onResetDemo: () => void;
+  onCopyInvite: () => void;
 }) {
   const betCount = props.room.currentRace.bets.length;
 
@@ -628,15 +659,56 @@ function HomeView(props: {
     <div className="screen-stack">
       <section className="race-hero">
         <div>
-          <p className="badge">開催中</p>
+          <p className="badge">{props.room.isDemo ? "デモ表示" : "開催中"}</p>
           <h2>{props.room.currentRace.title}</h2>
-          <p>スマブラ、マリカ、カラオケまで使える身内コインBET</p>
+          <p>{props.room.isDemo ? "この名前と数値は操作確認用のサンプルです" : "友だちのスマホから同じルームに参加できます"}</p>
         </div>
         <div className="timer">
           <Radio size={18} />
           {props.timeLeft}
         </div>
       </section>
+
+      <section className="guide-panel">
+        <div className="section-heading">
+          <Gamepad2 size={20} />
+          <div>
+            <h2>あそび方</h2>
+            <p>ホストが作って、友だちは参加するだけ</p>
+          </div>
+        </div>
+        <div className="guide-steps">
+          <span>1</span>
+          <strong>新規ルーム</strong>
+          <p>幹事がルームを作る</p>
+          <span>2</span>
+          <strong>共有</strong>
+          <p>URL・Room ID・参加コードを送る</p>
+          <span>3</span>
+          <strong>BET</strong>
+          <p>各スマホ、または幹事代行で入力</p>
+        </div>
+      </section>
+
+      {!props.room.isDemo && (
+        <section className="share-card">
+          <div>
+            <span>共有URL</span>
+            <strong>{props.publicUrl}</strong>
+          </div>
+          <div>
+            <span>Room ID</span>
+            <strong>{props.room.id}</strong>
+          </div>
+          <div>
+            <span>参加コード</span>
+            <strong>{props.room.joinCode}</strong>
+          </div>
+          <button className="secondary-button full" type="button" onClick={props.onCopyInvite}>
+            招待をコピー
+          </button>
+        </section>
+      )}
 
       {props.hasJackpot && (
         <section className="jackpot">
@@ -671,7 +743,7 @@ function HomeView(props: {
         </button>
         <button className="secondary-button" type="button" onClick={props.onCreateRoom}>
           <Plus size={18} />
-          新規ルーム
+          {props.room.isDemo ? "本番ルーム" : "新規ルーム"}
         </button>
         <button className="secondary-button icon-only" type="button" aria-label="デモリセット" onClick={props.onResetDemo}>
           <RotateCcw size={18} />
@@ -860,6 +932,7 @@ function HostView(props: {
   onAddContestant: () => void;
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
+  onRoomNameChange: (name: string) => void;
   onPlayerSkillChange: (playerId: string, skillRating: number) => void;
   onContestantStrengthChange: (
     contestantId: string,
@@ -881,6 +954,10 @@ function HostView(props: {
             <p>Room ID {props.room.id} / 参加コード {props.room.joinCode}</p>
           </div>
         </div>
+        <label className="room-name-field">
+          勝負名
+          <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder="例: スマブラ王決定戦" />
+        </label>
         <div className="theme-row">
           {(Object.keys(themeLabels) as ThemeName[]).map((theme) => (
             <button

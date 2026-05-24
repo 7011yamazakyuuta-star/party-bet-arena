@@ -53,6 +53,7 @@ export type Race = {
 export type Room = {
   id: string;
   name: string;
+  isDemo: boolean;
   joinCode: string;
   hostPin: string;
   theme: ThemeName;
