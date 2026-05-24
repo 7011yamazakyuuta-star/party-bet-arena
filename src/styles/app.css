@@ -478,6 +478,57 @@ h2 {
   position: relative;
 }
 
+.mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mode-card {
+  min-height: 124px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: space-between;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 14px;
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
+}
+
+.mode-card svg:first-child {
+  color: var(--accent);
+}
+
+.mode-card span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mode-card strong {
+  grid-column: 1 / 2;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.mode-card svg:last-child {
+  align-self: end;
+  justify-self: end;
+}
+
+:root[data-theme="party"] .mode-card.host {
+  border-color: rgba(242, 193, 20, 0.48);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 242, 174, 0.72));
+}
+
+:root[data-theme="party"] .mode-card.guest {
+  border-color: rgba(53, 104, 255, 0.36);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(194, 226, 255, 0.76));
+}
+
 .guide-steps {
   display: grid;
   grid-template-columns: 34px 76px 1fr;
@@ -559,6 +610,12 @@ h2 {
 .join-panel {
   display: grid;
   gap: 12px;
+}
+
+.join-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 label {

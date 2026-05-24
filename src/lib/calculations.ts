@@ -1,7 +1,8 @@
 import type { Bet, BetType, Contestant, DraftBet, Player, Room } from "./types";
 
 export const currency = new Intl.NumberFormat("ja-JP");
-export const maxLimit = 8;
+export const maxParticipantLimit = 8;
+export const maxRating = 9;
 
 export function getContestant(room: Room, contestantId: string) {
   return room.contestants.find((contestant) => contestant.id === contestantId);
@@ -166,6 +167,10 @@ export function rankedPlayers(players: Player[]) {
   return [...players].sort((a, b) => b.balance - a.balance);
 }
 
-export function clampLimit(value: number) {
-  return Math.max(1, Math.min(maxLimit, Math.floor(value)));
+export function clampCount(value: number) {
+  return Math.max(1, Math.min(maxParticipantLimit, Math.floor(value)));
+}
+
+export function clampRating(value: number) {
+  return Math.max(1, Math.min(maxRating, Math.floor(value)));
 }

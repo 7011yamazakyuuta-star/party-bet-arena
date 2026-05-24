@@ -24,7 +24,8 @@ import {
 } from "lucide-react";
 import {
   calculateAutoOdds,
-  clampLimit,
+  clampCount,
+  clampRating,
   createBet,
   currency,
   getAvailableBalance,
@@ -183,6 +184,18 @@ function App() {
     showToast("新しいルームを作成しました。");
   }
 
+  function handleHostMode() {
+    setSession({ role: "host" });
+    setTab("host");
+  }
+
+  function handleJoinMode() {
+    setSession({ role: "player" });
+    setJoinRoomId(room.isDemo ? "" : room.id);
+    setJoinCode(room.isDemo ? "" : room.joinCode);
+    setTab("home");
+  }
+
   async function handleJoinPlayer() {
     const normalizedRoomId = joinRoomId.trim().toUpperCase();
     let targetRoom = room;
@@ -279,7 +292,7 @@ function App() {
           balance: current.startingBalance,
           isOffline: newPlayerOffline,
           accent: ["#55f3ec", "#9d7cff", "#ffcf5b", "#ff8f70"][current.players.length % 4],
-          skillRating: clampLimit(newPlayerSkill),
+          skillRating: clampRating(newPlayerSkill),
         },
       ],
       updatedAt: Date.now(),
@@ -307,8 +320,8 @@ function App() {
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
               icon: "sparkle",
-              strengthRating: clampLimit(newContestantStrength),
-              cpuLevel: clampLimit(newContestantCpuLevel),
+              strengthRating: clampRating(newContestantStrength),
+              cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
             },
           ])
@@ -320,8 +333,8 @@ function App() {
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
               icon: "sparkle",
-              strengthRating: clampLimit(newContestantStrength),
-              cpuLevel: clampLimit(newContestantCpuLevel),
+              strengthRating: clampRating(newContestantStrength),
+              cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
             },
           ],
@@ -375,8 +388,8 @@ function App() {
           ? {
               ...contestant,
               ...patch,
-              strengthRating: clampLimit(patch.strengthRating ?? contestant.strengthRating),
-              cpuLevel: clampLimit(patch.cpuLevel ?? contestant.cpuLevel),
+              strengthRating: clampRating(patch.strengthRating ?? contestant.strengthRating),
+              cpuLevel: clampRating(patch.cpuLevel ?? contestant.cpuLevel),
             }
           : contestant,
       );
@@ -393,7 +406,7 @@ function App() {
     updateRoom((current) => ({
       ...current,
       players: current.players.map((player) =>
-        player.id === playerId ? { ...player, skillRating: clampLimit(skillRating) } : player,
+        player.id === playerId ? { ...player, skillRating: clampRating(skillRating) } : player,
       ),
       updatedAt: Date.now(),
     }));
@@ -404,7 +417,7 @@ function App() {
       ...current,
       settings: {
         ...current.settings,
-        [key]: typeof value === "number" ? clampLimit(value) : value,
+        [key]: typeof value === "number" ? clampCount(value) : value,
       },
       updatedAt: Date.now(),
     }));
@@ -469,7 +482,7 @@ function App() {
             <h1>{room.name}</h1>
           </div>
           <div className="top-actions">
-            <button className="pill-button" type="button" onClick={() => setSession({ role: "host" })}>
+            <button className="pill-button" type="button" onClick={handleHostMode}>
               <Crown size={18} />
               Host
             </button>
@@ -522,6 +535,8 @@ function App() {
                 publicUrl={publicUrl}
                 onCreateRoom={handleCreateRoom}
                 onBetTab={() => setTab("bet")}
+                onHostTab={handleHostMode}
+                onJoinMode={handleJoinMode}
                 onResetDemo={handleResetDemo}
                 onCopyInvite={handleCopyInvite}
               />
@@ -623,7 +638,7 @@ function JoinPanel(props: {
       </label>
       <label>
         Room ID
-        <input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value)} placeholder="DEMO42" />
+        <input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value)} placeholder="AB12CD" />
       </label>
       <label>
         参加コード
@@ -638,6 +653,7 @@ function JoinPanel(props: {
         参加する
         <ChevronRight size={22} />
       </button>
+      <p className="join-help">ホストから届いた招待文のURL、Room ID、参加コードを使います。DEMO42は練習用です。</p>
     </section>
   );
 }
@@ -650,6 +666,8 @@ function HomeView(props: {
   publicUrl: string;
   onCreateRoom: () => void;
   onBetTab: () => void;
+  onHostTab: () => void;
+  onJoinMode: () => void;
   onResetDemo: () => void;
   onCopyInvite: () => void;
 }) {
@@ -688,6 +706,21 @@ function HomeView(props: {
           <strong>BET</strong>
           <p>各スマホ、または幹事代行で入力</p>
         </div>
+      </section>
+
+      <section className="mode-cards" aria-label="開始方法">
+        <button className="mode-card host" type="button" onClick={props.room.isDemo ? props.onCreateRoom : props.onHostTab}>
+          <Crown size={22} />
+          <span>幹事で始める</span>
+          <strong>{props.room.isDemo ? "本番ルームを作る" : "管理画面を開く"}</strong>
+          <ChevronRight size={20} />
+        </button>
+        <button className="mode-card guest" type="button" onClick={props.onJoinMode}>
+          <Users size={22} />
+          <span>友だちとして参加</span>
+          <strong>Room IDとコードを入力</strong>
+          <ChevronRight size={20} />
+        </button>
       </section>
 
       {!props.room.isDemo && (
