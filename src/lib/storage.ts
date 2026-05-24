@@ -51,7 +51,7 @@ export function normalizeRoom(room: Room): Room {
   return {
     ...fallback,
     ...room,
-    isDemo: room.isDemo ?? false,
+    isDemo: room.isDemo ?? room.id === "DEMO42",
     theme: room.theme ?? fallback.theme,
     settings: {
       ...fallback.settings,

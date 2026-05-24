@@ -117,7 +117,7 @@ function App() {
   }, [betType]);
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
+    if (!isFirebaseConfigured || room.isDemo) return;
 
     let unsubscribe: undefined | (() => void);
     subscribeFirebaseRoom(room.id, (remoteRoom) => {
@@ -130,7 +130,7 @@ function App() {
     return () => {
       unsubscribe?.();
     };
-  }, [room.id]);
+  }, [room.id, room.isDemo]);
 
   const ranking = useMemo(() => rankedPlayers(room.players), [room.players]);
   const currentPlayer = room.players.find((player) => player.id === session.playerId);
@@ -156,7 +156,7 @@ function App() {
   function commitRoom(nextRoom: Room, sync = true) {
     setRoom(nextRoom);
     saveRoom(nextRoom);
-    if (sync && isFirebaseConfigured) {
+    if (sync && isFirebaseConfigured && !nextRoom.isDemo) {
       saveFirebaseRoom(nextRoom).catch(() => {
         setToast("Firebase保存に失敗しました。ローカル状態は保持しています。");
       });
