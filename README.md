@@ -1,0 +1,101 @@
+# Party Bet Arena
+
+身内で遊ぶための汎用ベッティング＆ランキングWebアプリです。競馬風のBET体験を、スマブラ、マリオカート、カラオケ、ボードゲームなどの勝負に転用できます。
+
+> 注意: このアプリはゲーム内コインだけを扱う身内向けツールです。現金、換金、賞品、賭博性のある運用には使わないでください。
+
+## できること
+
+- ルーム作成、Room ID、参加コード発行
+- ホストモードとプレイヤーモード
+- ホストによる代行BET入力
+- 競走対象ごとの手動オッズ設定
+- 単勝、複勝BET
+- 所持コインを超えるBETの防止
+- BET状況ダッシュボード
+- 結果入力と自動配当計算
+- リアルタイムランキング
+- 破産者表示、大穴的中エフェクト
+- `Neon` / `Pop` / `Minimal` のデザイン切替
+
+## 技術構成
+
+- React + TypeScript + Vite
+- Firebase Realtime Database optional sync
+- GitHub Pages hosting
+- iPhone縦向き優先のSPA
+
+Firebase設定がない場合は、ブラウザのlocalStorageを使うローカルデモとして動作します。
+
+## セットアップ
+
+```bash
+npm install
+npm run dev
+```
+
+PowerShellで`npm`が実行ポリシーに止められる場合は、Windowsの実体コマンドを使います。
+
+```bash
+npm.cmd install
+npm.cmd run dev
+```
+
+## Firebase設定
+
+このリポジトリはpublic前提です。Firebaseの実値や`.env.local`はコミットしないでください。
+
+1. Firebase ConsoleでWebアプリを追加
+2. `.env.example`を参考に、ローカルだけに`.env.local`を作成
+3. `VITE_FIREBASE_*`にFirebase Web configの値を入れる
+
+```bash
+cp .env.example .env.local
+```
+
+`.env.local`は`.gitignore`で除外されています。
+
+Firebase Web configの`apiKey`はブラウザに配布される前提の識別子ですが、Database Rulesが本体の防御です。管理者用のサービスアカウント鍵はこのアプリでは使いません。
+
+## Realtime Database Rulesの初期案
+
+開発中のテストモードは公開前に必ず解除してください。最初の身内テスト用には、少なくとも匿名認証済みユーザーだけに制限します。
+
+```json
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['id', 'name', 'joinCode', 'players', 'contestants', 'currentRace'])"
+      }
+    }
+  }
+}
+```
+
+このルールはMVP用です。Room IDを知る匿名ユーザーが同じルームを操作できる前提なので、公開範囲を広げる前に、ホスト権限、参加者権限、招待コード検証をさらに厳密化してください。
+
+## GitHub Pages
+
+このリポジトリにはGitHub Pages向けのActions workflowを含めています。
+
+GitHubでの設定:
+
+1. Repository `Settings`
+2. `Pages`
+3. `Build and deployment`
+4. Sourceを `GitHub Actions` にする
+5. `main`へpushすると自動デプロイ
+
+Firebase configをGitHub Pages上でも有効にする場合は、GitHubのRepository secretsではなく、Repository variablesで`VITE_FIREBASE_*`を設定する運用がおすすめです。値は公開バンドルに含まれるため、秘密情報は入れないでください。
+
+## 開発メモ
+
+- コインはゲーム内ポイントとして扱います。
+- BET時点ではコインを予約し、結果確定時に元本を差し引いて配当を加算します。
+- 複勝は3着以内を的中扱いにし、倍率は単勝オッズの約52%で計算します。
+- ルームパスワードや参加コードは身内の簡易制御用であり、強固な認証ではありません。
