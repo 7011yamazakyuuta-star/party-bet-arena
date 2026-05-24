@@ -1,5 +1,5 @@
 import { createInitialRoom } from "./sample";
-import type { AppRole, Room } from "./types";
+import type { AppRole, LanguageName, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
@@ -7,7 +7,23 @@ const sessionKey = "party-bet-arena:session";
 export type LocalSession = {
   role: AppRole;
   playerId?: string;
+  language: LanguageName;
 };
+
+const validThemes = new Set<ThemeName>(["party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
+const fallbackEmojis = ["🎮", "😎", "🌟", "🚗", "🎲", "🔥", "🍀", "🏆"];
+const fallbackContestantIcons = ["👑", "🤖", "⚡", "🍀", "🚀", "🎯", "💎", "⭐"];
+const legacyContestantIcons: Record<string, string> = {
+  sparkle: "👑",
+  wave: "🤖",
+  bolt: "⚡",
+  leaf: "🍀",
+};
+
+function normalizeIcon(icon: string | undefined, index: number) {
+  if (!icon) return fallbackContestantIcons[index % fallbackContestantIcons.length];
+  return legacyContestantIcons[icon] ?? icon;
+}
 
 export function loadRoom() {
   const stored = localStorage.getItem(roomKey);
@@ -26,12 +42,17 @@ export function saveRoom(room: Room) {
 
 export function loadSession(): LocalSession {
   const stored = localStorage.getItem(sessionKey);
-  if (!stored) return { role: "host" };
+  if (!stored) return { role: "host", language: "ja" };
 
   try {
-    return JSON.parse(stored) as LocalSession;
+    const session = JSON.parse(stored) as Partial<LocalSession>;
+    return {
+      role: session.role === "player" ? "player" : "host",
+      playerId: session.playerId,
+      language: session.language === "en" ? "en" : "ja",
+    };
   } catch {
-    return { role: "host" };
+    return { role: "host", language: "ja" };
   }
 }
 
@@ -52,7 +73,7 @@ export function normalizeRoom(room: Room): Room {
     ...fallback,
     ...room,
     isDemo: room.isDemo ?? room.id === "DEMO42",
-    theme: room.theme ?? fallback.theme,
+    theme: validThemes.has(room.theme) ? room.theme : fallback.theme,
     settings: {
       ...fallback.settings,
       ...room.settings,
@@ -62,9 +83,11 @@ export function normalizeRoom(room: Room): Room {
     players: (room.players ?? fallback.players).map((player, index) => ({
       ...player,
       skillRating: player.skillRating ?? Math.max(1, Math.min(9, 5 + index)),
+      emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
     })),
     contestants: (room.contestants ?? fallback.contestants).map((contestant, index) => ({
       ...contestant,
+      icon: normalizeIcon(contestant.icon, index),
       strengthRating: contestant.strengthRating ?? Math.max(1, 9 - index),
       cpuLevel: contestant.cpuLevel ?? Math.max(1, 9 - index),
       isCpu: contestant.isCpu ?? index > 0,

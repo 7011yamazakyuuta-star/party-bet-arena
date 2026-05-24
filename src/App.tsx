@@ -43,23 +43,59 @@ import {
 import { createBlankRoom } from "./lib/sample";
 import { fetchFirebaseRoom, isFirebaseConfigured, saveFirebaseRoom, subscribeFirebaseRoom } from "./lib/firebase";
 import { loadRoom, loadSession, resetLocalRoom, saveRoom, saveSession } from "./lib/storage";
-import type { BetType, DraftBet, Player, Room, ThemeName } from "./lib/types";
+import type { BetType, DraftBet, LanguageName, Player, Room, ThemeName } from "./lib/types";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
+type Translate = (ja: string, en: string) => string;
 
-const themeLabels: Record<ThemeName, string> = {
-  party: "Party",
-  neon: "Neon",
-  pop: "Pop",
-  minimal: "Minimal",
-};
+const themeOrder: ThemeName[] = ["party", "garden", "candy", "sky", "neon", "pop", "minimal"];
+const emojiChoices = [
+  "😀",
+  "😎",
+  "🥳",
+  "🎮",
+  "🎲",
+  "🎯",
+  "🏆",
+  "👑",
+  "🔥",
+  "⚡",
+  "🌟",
+  "⭐",
+  "🍀",
+  "🌈",
+  "🍭",
+  "🎤",
+  "🎧",
+  "🚗",
+  "🏎️",
+  "🚀",
+  "🛡️",
+  "💎",
+  "🤖",
+  "🍄",
+];
 
-const betTypeLabels: Record<BetType, { title: string; note: string }> = {
-  win: { title: "単勝", note: "1着を当てる" },
-  place: { title: "複勝", note: "3着以内を当てる" },
-  exacta: { title: "2連単", note: "1着・2着を順番通り" },
-  trifecta: { title: "3連単", note: "1着から3着まで順番通り" },
-};
+function getThemeCopy(t: Translate): Record<ThemeName, { label: string; note: string }> {
+  return {
+    party: { label: t("パーティ", "Party"), note: t("やさしく明るい定番テーマ", "Bright and friendly default") },
+    garden: { label: t("ガーデン", "Garden"), note: t("緑と白の落ち着いた遊び場", "Soft green and calm") },
+    candy: { label: t("キャンディ", "Candy"), note: t("少しポップでにぎやか", "Playful and colorful") },
+    sky: { label: t("スカイ", "Sky"), note: t("青空っぽく見やすい", "Clear and airy") },
+    neon: { label: t("ネオン", "Neon"), note: t("暗めでゲーミング感", "Dark gaming glow") },
+    pop: { label: t("ポップ", "Pop"), note: t("濃いめのイベント感", "Vivid event mood") },
+    minimal: { label: t("ミニマル", "Minimal"), note: t("控えめで読みやすい", "Quiet and readable") },
+  };
+}
+
+function getBetTypeCopy(t: Translate): Record<BetType, { title: string; note: string }> {
+  return {
+    win: { title: t("単勝", "Win"), note: t("1位を当てる", "Pick 1st place") },
+    place: { title: t("複勝", "Place"), note: t("3位以内を当てる", "Pick top 3") },
+    exacta: { title: t("2連単", "Exacta"), note: t("1位・2位を順番通り", "Pick 1st and 2nd in order") },
+    trifecta: { title: t("3連単", "Trifecta"), note: t("1位から3位まで順番通り", "Pick 1st to 3rd in order") },
+  };
+}
 
 const quickAmounts = [10, 50, 100, 250, 500];
 
@@ -70,6 +106,20 @@ function formatTime(milliseconds: number) {
     .padStart(2, "0");
   const seconds = (total % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function translateBetError(error: string, t: Translate) {
+  const messages: Record<string, string> = {
+    "BET受付中ではありません。": "Betting is closed.",
+    "プレイヤーを選んでください。": "Choose a bettor first.",
+    "賭け先を選んでください。": "Choose who to bet on.",
+    "同じ対象を複数順位に選ぶことはできません。": "You cannot choose the same player for multiple positions.",
+    "BET額を入力してください。": "Enter a bet amount.",
+    "利用可能コインを超えています。": "This bet exceeds available coins.",
+  };
+  const pickCountMatch = error.match(/^(\d+)つの順位を選んでください。$/);
+  if (pickCountMatch) return t(error, `Choose ${pickCountMatch[1]} positions.`);
+  return t(error, messages[error] ?? error);
 }
 
 function App() {
@@ -87,18 +137,28 @@ function App() {
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerOffline, setNewPlayerOffline] = useState(true);
   const [newPlayerSkill, setNewPlayerSkill] = useState(5);
+  const [newPlayerEmoji, setNewPlayerEmoji] = useState("🎮");
   const [newContestantName, setNewContestantName] = useState("");
   const [newContestantOdds, setNewContestantOdds] = useState(2.5);
   const [newContestantStrength, setNewContestantStrength] = useState(7);
   const [newContestantCpuLevel, setNewContestantCpuLevel] = useState(7);
   const [newContestantIsCpu, setNewContestantIsCpu] = useState(true);
+  const [newContestantEmoji, setNewContestantEmoji] = useState("🤖");
   const [resultIds, setResultIds] = useState<string[]>(room.currentRace.resultIds);
   const [toast, setToast] = useState("");
   const [tick, setTick] = useState(Date.now());
+  const language = session.language ?? "ja";
+  const t: Translate = (ja, en) => (language === "ja" ? ja : en);
+  const betTypeLabels = useMemo(() => getBetTypeCopy(t), [language]);
+  const themeCopy = useMemo(() => getThemeCopy(t), [language]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = room.theme;
   }, [room.theme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language === "ja" ? "ja" : "en";
+  }, [language]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setTick(Date.now()), 1000);
@@ -116,6 +176,13 @@ function App() {
   useEffect(() => {
     setSelectedPickIds((current) => current.slice(0, requiredPickCount(betType)));
   }, [betType]);
+
+  useEffect(() => {
+    if (session.role !== "host" || !room.players.length) return;
+    if (!room.players.some((player) => player.id === proxyPlayerId)) {
+      setProxyPlayerId(room.players[0].id);
+    }
+  }, [proxyPlayerId, room.players, session.role]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || room.isDemo) return;
@@ -159,7 +226,7 @@ function App() {
     saveRoom(nextRoom);
     if (sync && isFirebaseConfigured && !nextRoom.isDemo) {
       saveFirebaseRoom(nextRoom).catch(() => {
-        setToast("Firebase保存に失敗しました。ローカル状態は保持しています。");
+        setToast(t("Firebase保存に失敗しました。端末内の状態は残っています。", "Firebase save failed. Local state is still kept."));
       });
     }
   }
@@ -174,23 +241,23 @@ function App() {
   }
 
   function handleCreateRoom() {
-    const next = createBlankRoom("新しい勝負");
+    const next = createBlankRoom(t("新しい勝負", "New Match"));
     commitRoom(next);
-    setSession({ role: "host" });
+    setSession((current) => ({ ...current, role: "host", playerId: undefined }));
     setProxyPlayerId(next.players[0]?.id ?? "");
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
     setJoinRoomId(next.id);
-    showToast("新しいルームを作成しました。");
+    showToast(t("本番ルームを作成しました。共有カードから招待できます。", "Live room created. Share it from the invite card."));
   }
 
   function handleHostMode() {
-    setSession({ role: "host" });
+    setSession((current) => ({ ...current, role: "host", playerId: undefined }));
     setTab("host");
   }
 
   function handleJoinMode() {
-    setSession({ role: "player" });
+    setSession((current) => ({ ...current, role: "player", playerId: undefined }));
     setJoinRoomId(room.isDemo ? "" : room.id);
     setJoinCode(room.isDemo ? "" : room.joinCode);
     setTab("home");
@@ -203,20 +270,20 @@ function App() {
     if (normalizedRoomId !== room.id) {
       const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
       if (!remoteRoom) {
-        showToast("ルームが見つかりません。Room IDを確認してください。");
+        showToast(t("ルームが見つかりません。ルームIDを確認してください。", "Room not found. Please check the room ID."));
         return;
       }
       targetRoom = remoteRoom;
     }
 
     if (normalizedRoomId !== targetRoom.id || joinCode.trim() !== targetRoom.joinCode) {
-      showToast("ルームIDまたは参加コードが違います。");
+      showToast(t("ルームIDまたは参加コードが違います。", "Room ID or join code is incorrect."));
       return;
     }
 
-    const name = joinName.trim() || `Player ${targetRoom.players.length + 1}`;
+    const name = joinName.trim() || t(`参加者 ${targetRoom.players.length + 1}`, `Player ${targetRoom.players.length + 1}`);
     if (targetRoom.players.length >= targetRoom.settings.maxPlayers) {
-      showToast(`賭ける人は最大${targetRoom.settings.maxPlayers}人までです。`);
+      showToast(t(`参加者は最大${targetRoom.settings.maxPlayers}人までです。`, `Up to ${targetRoom.settings.maxPlayers} bettors can join.`));
       return;
     }
 
@@ -227,6 +294,7 @@ function App() {
       isOffline: false,
       accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][targetRoom.players.length % 4],
       skillRating: 5,
+      emoji: emojiChoices[targetRoom.players.length % emojiChoices.length],
     };
 
     const next = {
@@ -235,29 +303,29 @@ function App() {
       updatedAt: Date.now(),
     };
     commitRoom(next);
-    setSession({ role: "player", playerId: player.id });
+    setSession((current) => ({ ...current, role: "player", playerId: player.id }));
     setTab("bet");
-    showToast(`${name}で参加しました。`);
+    showToast(t(`${name}で参加しました。`, `Joined as ${name}.`));
   }
 
   function handleRoomNameChange(name: string) {
-    updateRoom((current) => ({ ...current, name: name || "新しい勝負", updatedAt: Date.now() }));
+    updateRoom((current) => ({ ...current, name: name || t("新しい勝負", "New Match"), updatedAt: Date.now() }));
   }
 
   async function handleCopyInvite() {
-    const text = `Party Bet Arena\nURL: ${publicUrl}\nRoom ID: ${room.id}\n参加コード: ${room.joinCode}`;
+    const text = `Party Bet Arena\nURL: ${publicUrl}\n${t("ルームID", "Room ID")}: ${room.id}\n${t("参加コード", "Join code")}: ${room.joinCode}`;
     try {
       await navigator.clipboard.writeText(text);
-      showToast("招待情報をコピーしました。");
+      showToast(t("招待情報をコピーしました。", "Invite copied."));
     } catch {
-      showToast("コピーできませんでした。URLとRoom IDを手動で共有してください。");
+      showToast(t("コピーできませんでした。URLとルームIDを手動で共有してください。", "Could not copy. Please share the URL and room ID manually."));
     }
   }
 
   function handlePlaceBet() {
     const error = validateBet(room, draftBet);
     if (error) {
-      showToast(error);
+      showToast(translateBetError(error, t));
       return;
     }
 
@@ -271,41 +339,45 @@ function App() {
     };
 
     commitRoom(next);
-    showToast("BETを受け付けました。");
+    showToast(t("ベットを受け付けました。", "Bet placed."));
   }
 
   function handleAddPlayer() {
     const name = newPlayerName.trim();
     if (!name) return;
     if (room.players.length >= room.settings.maxPlayers) {
-      showToast(`賭ける人は最大${room.settings.maxPlayers}人までです。`);
+      showToast(t(`参加者は最大${room.settings.maxPlayers}人までです。`, `Up to ${room.settings.maxPlayers} bettors can join.`));
       return;
     }
+    const playerId = crypto.randomUUID();
 
     updateRoom((current) => ({
       ...current,
       players: [
         ...current.players,
         {
-          id: crypto.randomUUID(),
+          id: playerId,
           name,
           balance: current.startingBalance,
           isOffline: newPlayerOffline,
           accent: ["#55f3ec", "#9d7cff", "#ffcf5b", "#ff8f70"][current.players.length % 4],
           skillRating: clampRating(newPlayerSkill),
+          emoji: newPlayerEmoji,
         },
       ],
       updatedAt: Date.now(),
     }));
     setNewPlayerName("");
-    showToast("プレイヤーを追加しました。");
+    setNewPlayerEmoji(emojiChoices[(room.players.length + 1) % emojiChoices.length]);
+    setProxyPlayerId(playerId);
+    showToast(t("参加者を追加しました。", "Bettor added."));
   }
 
   function handleAddContestant() {
     const name = newContestantName.trim();
     if (!name) return;
     if (room.contestants.length >= room.settings.maxContestants) {
-      showToast(`プレイヤーは最大${room.settings.maxContestants}人までです。`);
+      showToast(t(`勝負するプレイヤーは最大${room.settings.maxContestants}人までです。`, `Up to ${room.settings.maxContestants} contestants can play.`));
       return;
     }
 
@@ -319,7 +391,7 @@ function App() {
               name,
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
-              icon: "sparkle",
+              icon: newContestantEmoji,
               strengthRating: clampRating(newContestantStrength),
               cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
@@ -332,7 +404,7 @@ function App() {
               name,
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
-              icon: "sparkle",
+              icon: newContestantEmoji,
               strengthRating: clampRating(newContestantStrength),
               cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
@@ -344,7 +416,8 @@ function App() {
     setNewContestantOdds(2.5);
     setNewContestantStrength(7);
     setNewContestantCpuLevel(7);
-    showToast("競走対象を追加しました。");
+    setNewContestantEmoji(emojiChoices[(room.contestants.length + 3) % emojiChoices.length]);
+    showToast(t("勝負するプレイヤーを追加しました。", "Contestant added."));
   }
 
   function handleOddsChange(contestantId: string, odds: number) {
@@ -360,6 +433,10 @@ function App() {
 
   function handleThemeChange(theme: ThemeName) {
     updateRoom((current) => ({ ...current, theme, updatedAt: Date.now() }));
+  }
+
+  function handleLanguageChange(nextLanguage: LanguageName) {
+    setSession((current) => ({ ...current, language: nextLanguage }));
   }
 
   function handlePickContestant(contestantId: string) {
@@ -380,7 +457,7 @@ function App() {
 
   function handleContestantStrengthChange(
     contestantId: string,
-    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean }>,
+    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean; icon: string }>,
   ) {
     updateRoom((current) => {
       const contestants = current.contestants.map((contestant) =>
@@ -412,6 +489,14 @@ function App() {
     }));
   }
 
+  function handlePlayerEmojiChange(playerId: string, emoji: string) {
+    updateRoom((current) => ({
+      ...current,
+      players: current.players.map((player) => (player.id === playerId ? { ...player, emoji } : player)),
+      updatedAt: Date.now(),
+    }));
+  }
+
   function handleSettingChange(key: "maxPlayers" | "maxContestants" | "autoOdds", value: number | boolean) {
     updateRoom((current) => ({
       ...current,
@@ -430,7 +515,7 @@ function App() {
       contestants: calculateAutoOdds(current.contestants),
       updatedAt: Date.now(),
     }));
-    showToast("強さ/CPU Lvからオッズを自動調整しました。");
+    showToast(t("強さ/CPU Lvからオッズを自動調整しました。", "Odds updated from strength and CPU level."));
   }
 
   function handleResultPick(contestantId: string) {
@@ -442,12 +527,12 @@ function App() {
 
   function handleSettle() {
     if (resultIds.length !== room.contestants.length) {
-      showToast("1位から最下位まで順番に選んでください。");
+      showToast(t("1位から最下位まで順番に選んでください。", "Pick every result from first to last."));
       return;
     }
     commitRoom(settleRoom(room, resultIds));
     setTab("ranking");
-    showToast("結果を確定して配当を反映しました。");
+    showToast(t("結果を確定して配当を反映しました。", "Results settled and payouts applied."));
   }
 
   function handleNextRace() {
@@ -456,18 +541,18 @@ function App() {
     setResultIds([]);
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
-    showToast("次の勝負を開始しました。");
+    showToast(t("次の勝負を開始しました。", "Next round started."));
   }
 
   function handleResetDemo() {
     const next = resetLocalRoom();
     setRoom(next);
-    setSession({ role: "host" });
+    setSession((current) => ({ ...current, role: "host", playerId: undefined }));
     setTab("home");
     setProxyPlayerId(next.players[0]?.id ?? "");
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
-    showToast("デモ状態をリセットしました。");
+    showToast(t("デモ状態をリセットしました。", "Demo reset."));
   }
 
   return (
@@ -484,13 +569,21 @@ function App() {
           <div className="top-actions">
             <button className="pill-button" type="button" onClick={handleHostMode}>
               <Crown size={18} />
-              Host
+              {t("幹事", "Host")}
+            </button>
+            <button
+              className="pill-button language-button"
+              type="button"
+              onClick={() => handleLanguageChange(language === "ja" ? "en" : "ja")}
+              aria-label={t("言語を切り替え", "Switch language")}
+            >
+              {language === "ja" ? "JP" : "EN"}
             </button>
             <button
               className="icon-button"
               type="button"
-              aria-label="ゲストモード"
-              onClick={() => setSession({ role: "player", playerId: currentPlayer?.id })}
+              aria-label={t("ゲストモード", "Guest mode")}
+              onClick={() => setSession((current) => ({ ...current, role: "player", playerId: currentPlayer?.id }))}
             >
               <Users size={20} />
             </button>
@@ -499,17 +592,17 @@ function App() {
 
         <section className="status-strip">
           <div>
-            <span>Room</span>
+            <span>{t("ルーム", "Room")}</span>
             <strong>{room.id}</strong>
           </div>
           <div>
-            <span>Code</span>
+            <span>{t("コード", "Code")}</span>
             <strong>{room.joinCode}</strong>
           </div>
           <div>
-            <span>{room.isDemo ? "Mode" : isFirebaseConfigured ? "Sync" : "Local"}</span>
+            <span>{room.isDemo ? t("表示", "Mode") : isFirebaseConfigured ? t("同期", "Sync") : t("保存先", "Storage")}</span>
             <strong className={isFirebaseConfigured ? "online" : ""}>
-              {room.isDemo ? "Demo" : isFirebaseConfigured ? "Firebase" : "Local"}
+              {room.isDemo ? t("デモ", "Demo") : isFirebaseConfigured ? "Firebase" : t("端末内", "Local")}
             </strong>
           </div>
         </section>
@@ -523,6 +616,7 @@ function App() {
             joinCode={joinCode}
             setJoinCode={setJoinCode}
             onJoin={handleJoinPlayer}
+            t={t}
           />
         ) : (
           <>
@@ -533,6 +627,7 @@ function App() {
                 timeLeft={timeLeft}
                 hasJackpot={hasJackpot}
                 publicUrl={publicUrl}
+                t={t}
                 onCreateRoom={handleCreateRoom}
                 onBetTab={() => setTab("bet")}
                 onHostTab={handleHostMode}
@@ -560,6 +655,8 @@ function App() {
                 selectedContestant={selectedContestant}
                 potentialPayout={potentialPayout}
                 onPlaceBet={handlePlaceBet}
+                betTypeLabels={betTypeLabels}
+                t={t}
               />
             )}
 
@@ -572,6 +669,8 @@ function App() {
                 setNewPlayerOffline={setNewPlayerOffline}
                 newPlayerSkill={newPlayerSkill}
                 setNewPlayerSkill={setNewPlayerSkill}
+                newPlayerEmoji={newPlayerEmoji}
+                setNewPlayerEmoji={setNewPlayerEmoji}
                 newContestantName={newContestantName}
                 setNewContestantName={setNewContestantName}
                 newContestantOdds={newContestantOdds}
@@ -582,13 +681,19 @@ function App() {
                 setNewContestantCpuLevel={setNewContestantCpuLevel}
                 newContestantIsCpu={newContestantIsCpu}
                 setNewContestantIsCpu={setNewContestantIsCpu}
+                newContestantEmoji={newContestantEmoji}
+                setNewContestantEmoji={setNewContestantEmoji}
                 resultIds={resultIds}
+                themeCopy={themeCopy}
+                betTypeLabels={betTypeLabels}
+                t={t}
                 onAddPlayer={handleAddPlayer}
                 onAddContestant={handleAddContestant}
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
                 onRoomNameChange={handleRoomNameChange}
                 onPlayerSkillChange={handlePlayerSkillChange}
+                onPlayerEmojiChange={handlePlayerEmojiChange}
                 onContestantStrengthChange={handleContestantStrengthChange}
                 onSettingChange={handleSettingChange}
                 onAutoOdds={handleAutoOdds}
@@ -598,7 +703,7 @@ function App() {
               />
             )}
 
-            {tab === "ranking" && <RankingView room={room} ranking={ranking} />}
+            {tab === "ranking" && <RankingView room={room} ranking={ranking} t={t} />}
           </>
         )}
 
@@ -608,7 +713,7 @@ function App() {
           </div>
         )}
 
-        <BottomNav active={tab} role={session.role} onChange={setTab} />
+        <BottomNav active={tab} role={session.role} onChange={setTab} t={t} />
       </section>
     </main>
   );
@@ -622,26 +727,27 @@ function JoinPanel(props: {
   joinCode: string;
   setJoinCode: (value: string) => void;
   onJoin: () => void;
+  t: Translate;
 }) {
   return (
     <section className="join-panel">
       <div className="section-heading">
         <Users size={20} />
         <div>
-          <h2>プレイヤー参加</h2>
-          <p>ホストから共有されたIDとコードを入力</p>
+          <h2>{props.t("参加する", "Join Room")}</h2>
+          <p>{props.t("幹事から共有されたIDとコードを入力", "Enter the ID and code shared by the host")}</p>
         </div>
       </div>
       <label>
-        名前
-        <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder="ニックネーム" />
+        {props.t("名前", "Name")}
+        <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder={props.t("ニックネーム", "Nickname")} />
       </label>
       <label>
-        Room ID
+        {props.t("ルームID", "Room ID")}
         <input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value)} placeholder="AB12CD" />
       </label>
       <label>
-        参加コード
+        {props.t("参加コード", "Join code")}
         <input
           inputMode="numeric"
           value={props.joinCode}
@@ -650,10 +756,12 @@ function JoinPanel(props: {
         />
       </label>
       <button className="primary-button" type="button" onClick={props.onJoin}>
-        参加する
+        {props.t("参加する", "Join")}
         <ChevronRight size={22} />
       </button>
-      <p className="join-help">ホストから届いた招待文のURL、Room ID、参加コードを使います。DEMO42は練習用です。</p>
+      <p className="join-help">
+        {props.t("幹事から届いた招待文のURL、ルームID、参加コードを使います。DEMO42は練習用です。", "Use the URL, room ID, and join code from the host. DEMO42 is only for practice.")}
+      </p>
     </section>
   );
 }
@@ -664,6 +772,7 @@ function HomeView(props: {
   timeLeft: string;
   hasJackpot: boolean;
   publicUrl: string;
+  t: Translate;
   onCreateRoom: () => void;
   onBetTab: () => void;
   onHostTab: () => void;
@@ -677,9 +786,13 @@ function HomeView(props: {
     <div className="screen-stack">
       <section className="race-hero">
         <div>
-          <p className="badge">{props.room.isDemo ? "デモ表示" : "開催中"}</p>
+          <p className="badge">{props.room.isDemo ? props.t("デモ表示", "Demo") : props.t("開催中", "Live")}</p>
           <h2>{props.room.currentRace.title}</h2>
-          <p>{props.room.isDemo ? "この名前と数値は操作確認用のサンプルです" : "友だちのスマホから同じルームに参加できます"}</p>
+          <p>
+            {props.room.isDemo
+              ? props.t("この名前と数値は操作確認用のサンプルです", "Names and numbers here are sample data")
+              : props.t("友だちのスマホから同じルームに参加できます", "Friends can join this room from their phones")}
+          </p>
         </div>
         <div className="timer">
           <Radio size={18} />
@@ -691,34 +804,34 @@ function HomeView(props: {
         <div className="section-heading">
           <Gamepad2 size={20} />
           <div>
-            <h2>あそび方</h2>
-            <p>ホストが作って、友だちは参加するだけ</p>
+            <h2>{props.t("あそび方", "How to Play")}</h2>
+            <p>{props.t("幹事が作って、友だちは参加するだけ", "The host creates a room, friends join and bet")}</p>
           </div>
         </div>
         <div className="guide-steps">
           <span>1</span>
-          <strong>新規ルーム</strong>
-          <p>幹事がルームを作る</p>
+          <strong>{props.t("本番ルーム", "Live room")}</strong>
+          <p>{props.t("幹事がルームを作る", "Host creates a room")}</p>
           <span>2</span>
-          <strong>共有</strong>
-          <p>URL・Room ID・参加コードを送る</p>
+          <strong>{props.t("共有", "Share")}</strong>
+          <p>{props.t("URL・ルームID・参加コードを送る", "Send URL, room ID, and code")}</p>
           <span>3</span>
-          <strong>BET</strong>
-          <p>各スマホ、または幹事代行で入力</p>
+          <strong>{props.t("ベット", "Bet")}</strong>
+          <p>{props.t("各スマホ、または幹事代行で入力", "Bet by phone or host proxy")}</p>
         </div>
       </section>
 
-      <section className="mode-cards" aria-label="開始方法">
+      <section className="mode-cards" aria-label={props.t("開始方法", "Start options")}>
         <button className="mode-card host" type="button" onClick={props.room.isDemo ? props.onCreateRoom : props.onHostTab}>
           <Crown size={22} />
-          <span>幹事で始める</span>
-          <strong>{props.room.isDemo ? "本番ルームを作る" : "管理画面を開く"}</strong>
+          <span>{props.t("幹事で始める", "Start as host")}</span>
+          <strong>{props.room.isDemo ? props.t("本番ルームを作る", "Create live room") : props.t("管理画面を開く", "Open controls")}</strong>
           <ChevronRight size={20} />
         </button>
         <button className="mode-card guest" type="button" onClick={props.onJoinMode}>
           <Users size={22} />
-          <span>友だちとして参加</span>
-          <strong>Room IDとコードを入力</strong>
+          <span>{props.t("友だちとして参加", "Join as friend")}</span>
+          <strong>{props.t("ルームIDとコードを入力", "Enter ID and code")}</strong>
           <ChevronRight size={20} />
         </button>
       </section>
@@ -726,19 +839,19 @@ function HomeView(props: {
       {!props.room.isDemo && (
         <section className="share-card">
           <div>
-            <span>共有URL</span>
+            <span>{props.t("共有URL", "Share URL")}</span>
             <strong>{props.publicUrl}</strong>
           </div>
           <div>
-            <span>Room ID</span>
+            <span>{props.t("ルームID", "Room ID")}</span>
             <strong>{props.room.id}</strong>
           </div>
           <div>
-            <span>参加コード</span>
+            <span>{props.t("参加コード", "Join code")}</span>
             <strong>{props.room.joinCode}</strong>
           </div>
           <button className="secondary-button full" type="button" onClick={props.onCopyInvite}>
-            招待をコピー
+            {props.t("招待をコピー", "Copy invite")}
           </button>
         </section>
       )}
@@ -746,39 +859,39 @@ function HomeView(props: {
       {props.hasJackpot && (
         <section className="jackpot">
           <Sparkles size={22} />
-          大穴的中が出ました
+          {props.t("大穴的中が出ました", "A big win landed")}
         </section>
       )}
 
       <section className="metric-grid">
-        <Metric icon={<Users size={20} />} label="Players" value={props.room.players.length.toString()} />
-        <Metric icon={<Gamepad2 size={20} />} label="Targets" value={props.room.contestants.length.toString()} />
-        <Metric icon={<CircleDollarSign size={20} />} label="Bets" value={betCount.toString()} />
+        <Metric icon={<Users size={20} />} label={props.t("参加者", "Bettors")} value={props.room.players.length.toString()} />
+        <Metric icon={<Gamepad2 size={20} />} label={props.t("対戦者", "Players")} value={props.room.contestants.length.toString()} />
+        <Metric icon={<CircleDollarSign size={20} />} label={props.t("ベット数", "Bets")} value={betCount.toString()} />
       </section>
 
       <section className="leader-preview">
         <div className="section-heading">
           <Trophy size={20} />
           <div>
-            <h2>ランキング</h2>
-            <p>保有コイン順でリアルタイム更新</p>
+            <h2>{props.t("ランキング", "Ranking")}</h2>
+            <p>{props.t("保有コイン順でリアルタイム更新", "Updates by current coin balance")}</p>
           </div>
         </div>
         {props.ranking.slice(0, 3).map((player, index) => (
-          <PlayerRankRow key={player.id} player={player} rank={index + 1} compact />
+          <PlayerRankRow key={player.id} player={player} rank={index + 1} compact t={props.t} />
         ))}
       </section>
 
       <section className="action-row">
         <button className="primary-button" type="button" onClick={props.onBetTab}>
-          BETへ
+          {props.t("ベットへ", "Go bet")}
           <ChevronRight size={22} />
         </button>
         <button className="secondary-button" type="button" onClick={props.onCreateRoom}>
           <Plus size={18} />
-          {props.room.isDemo ? "本番ルーム" : "新規ルーム"}
+          {props.room.isDemo ? props.t("本番ルーム", "Live room") : props.t("新規ルーム", "New room")}
         </button>
-        <button className="secondary-button icon-only" type="button" aria-label="デモリセット" onClick={props.onResetDemo}>
+        <button className="secondary-button icon-only" type="button" aria-label={props.t("デモリセット", "Reset demo")} onClick={props.onResetDemo}>
           <RotateCcw size={18} />
         </button>
       </section>
@@ -803,6 +916,8 @@ function BetView(props: {
   selectedContestant?: ReturnType<typeof getContestant>;
   potentialPayout: number;
   onPlaceBet: () => void;
+  betTypeLabels: Record<BetType, { title: string; note: string }>;
+  t: Translate;
 }) {
   const available = props.activePlayer ? getAvailableBalance(props.room, props.activePlayer.id) : 0;
   const pickCount = requiredPickCount(props.betType);
@@ -817,15 +932,15 @@ function BetView(props: {
           <div className="section-heading">
             <UserPlus size={20} />
             <div>
-              <h2>幹事代行入力</h2>
-              <p>スマホを使わない参加者のBETを代理受付</p>
+              <h2>{props.t("幹事代行入力", "Host Proxy Bet")}</h2>
+              <p>{props.t("スマホを使わない参加者のベットを代理受付", "Place bets for players without their own phone")}</p>
             </div>
           </div>
           <select value={props.proxyPlayerId} onChange={(event) => props.setProxyPlayerId(event.target.value)}>
             {props.room.players.map((player) => (
               <option key={player.id} value={player.id}>
                 {player.name}
-                {player.isOffline ? " / 代行" : ""}
+                {player.isOffline ? ` / ${props.t("代行", "Proxy")}` : ""}
               </option>
             ))}
           </select>
@@ -834,11 +949,11 @@ function BetView(props: {
 
       <section className="balance-banner">
         <div>
-          <span>Player</span>
-          <strong>{props.activePlayer?.name ?? "未選択"}</strong>
+          <span>{props.t("参加者", "Bettor")}</span>
+          <strong>{props.activePlayer ? `${props.activePlayer.emoji} ${props.activePlayer.name}` : props.t("未選択", "Not selected")}</strong>
         </div>
         <div>
-          <span>Available</span>
+          <span>{props.t("残コイン", "Available")}</span>
           <strong>{currency.format(available)}</strong>
         </div>
       </section>
@@ -853,7 +968,7 @@ function BetView(props: {
           >
             <span className="rank-chip">{index + 1}</span>
             <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
-              {contestant.name.slice(0, 1)}
+              {contestant.icon}
             </span>
             <span className="contestant-name">{contestant.name}</span>
             <strong>{contestant.odds.toFixed(2)}x</strong>
@@ -873,8 +988,8 @@ function BetView(props: {
             onClick={() => props.setBetType(type)}
           >
             {type === "win" || type === "exacta" ? <Trophy size={22} /> : <Medal size={22} />}
-            <strong>{betTypeLabels[type].title}</strong>
-            <span>{betTypeLabels[type].note}</span>
+            <strong>{props.betTypeLabels[type].title}</strong>
+            <span>{props.betTypeLabels[type].note}</span>
           </button>
         ))}
       </section>
@@ -885,8 +1000,8 @@ function BetView(props: {
             const contestant = selectedContestants[index];
             return (
               <div key={index}>
-                <span>{index + 1}着</span>
-                <strong>{contestant?.name ?? "未選択"}</strong>
+                <span>{props.t(`${index + 1}位`, `#${index + 1}`)}</span>
+                <strong>{contestant?.name ?? props.t("未選択", "Not selected")}</strong>
               </div>
             );
           })}
@@ -895,7 +1010,7 @@ function BetView(props: {
 
       <section className="amount-panel">
         <div className="amount-header">
-          <span>BET額</span>
+          <span>{props.t("ベット額", "Bet amount")}</span>
           <strong>
             {selectedContestants.length === pickCount
               ? `${placeMultiplier(props.betType, selectedContestants).toFixed(2)}x`
@@ -903,14 +1018,14 @@ function BetView(props: {
           </strong>
         </div>
         <div className="stepper">
-          <button type="button" onClick={() => props.setAmount(Math.max(0, props.amount - 10))} aria-label="BET額を減らす">
+          <button type="button" onClick={() => props.setAmount(Math.max(0, props.amount - 10))} aria-label={props.t("ベット額を減らす", "Decrease bet amount")}>
             <Minus size={20} />
           </button>
           <div>
             <strong>{currency.format(props.amount)}</strong>
-            <span>coins</span>
+            <span>{props.t("コイン", "coins")}</span>
           </div>
-          <button type="button" onClick={() => props.setAmount(props.amount + 10)} aria-label="BET額を増やす">
+          <button type="button" onClick={() => props.setAmount(props.amount + 10)} aria-label={props.t("ベット額を増やす", "Increase bet amount")}>
             <Plus size={20} />
           </button>
         </div>
@@ -921,7 +1036,7 @@ function BetView(props: {
             </button>
           ))}
           <button type="button" onClick={() => props.setAmount(available)}>
-            全額
+            {props.t("全額", "All")}
           </button>
         </div>
       </section>
@@ -929,13 +1044,13 @@ function BetView(props: {
       <section className="payout-preview">
         <div>
           <Sparkles size={24} />
-          <span>的中時の獲得見込み</span>
+          <span>{props.t("的中時の獲得見込み", "Estimated win")}</span>
         </div>
-        <strong>{currency.format(props.potentialPayout)} コイン</strong>
+        <strong>{currency.format(props.potentialPayout)} {props.t("コイン", "coins")}</strong>
       </section>
 
       <button className="primary-button sticky-action" type="button" onClick={props.onPlaceBet}>
-        BETする
+        {props.t("ベットする", "Place Bet")}
         <ChevronRight size={22} />
       </button>
     </div>
@@ -950,6 +1065,8 @@ function HostView(props: {
   setNewPlayerOffline: (value: boolean) => void;
   newPlayerSkill: number;
   setNewPlayerSkill: (value: number) => void;
+  newPlayerEmoji: string;
+  setNewPlayerEmoji: (value: string) => void;
   newContestantName: string;
   setNewContestantName: (value: string) => void;
   newContestantOdds: number;
@@ -960,16 +1077,22 @@ function HostView(props: {
   setNewContestantCpuLevel: (value: number) => void;
   newContestantIsCpu: boolean;
   setNewContestantIsCpu: (value: boolean) => void;
+  newContestantEmoji: string;
+  setNewContestantEmoji: (value: string) => void;
   resultIds: string[];
+  themeCopy: Record<ThemeName, { label: string; note: string }>;
+  betTypeLabels: Record<BetType, { title: string; note: string }>;
+  t: Translate;
   onAddPlayer: () => void;
   onAddContestant: () => void;
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
   onRoomNameChange: (name: string) => void;
   onPlayerSkillChange: (playerId: string, skillRating: number) => void;
+  onPlayerEmojiChange: (playerId: string, emoji: string) => void;
   onContestantStrengthChange: (
     contestantId: string,
-    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean }>,
+    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean; icon: string }>,
   ) => void;
   onSettingChange: (key: "maxPlayers" | "maxContestants" | "autoOdds", value: number | boolean) => void;
   onAutoOdds: () => void;
@@ -983,29 +1106,30 @@ function HostView(props: {
         <div className="section-heading">
           <Lock size={20} />
           <div>
-            <h2>ホスト管理</h2>
-            <p>Room ID {props.room.id} / 参加コード {props.room.joinCode}</p>
+            <h2>{props.t("幹事メニュー", "Host Controls")}</h2>
+            <p>{props.t("ルームID", "Room ID")} {props.room.id} / {props.t("参加コード", "Join code")} {props.room.joinCode}</p>
           </div>
         </div>
         <label className="room-name-field">
-          勝負名
-          <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder="例: スマブラ王決定戦" />
+          {props.t("勝負名", "Match name")}
+          <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder={props.t("例: スマブラ王決定戦", "Example: Smash Finals")} />
         </label>
-        <div className="theme-row">
-          {(Object.keys(themeLabels) as ThemeName[]).map((theme) => (
+        <div className="theme-grid">
+          {themeOrder.map((theme) => (
             <button
-              className={props.room.theme === theme ? "theme-button selected" : "theme-button"}
+              className={props.room.theme === theme ? "theme-card selected" : "theme-card"}
               key={theme}
               type="button"
               onClick={() => props.onThemeChange(theme)}
             >
-              {themeLabels[theme]}
+              <strong>{props.themeCopy[theme].label}</strong>
+              <span>{props.themeCopy[theme].note}</span>
             </button>
           ))}
         </div>
         <div className="settings-grid">
           <label>
-            賭ける人
+            {props.t("参加者", "Bettors")}
             <input
               type="number"
               min="1"
@@ -1015,7 +1139,7 @@ function HostView(props: {
             />
           </label>
           <label>
-            プレイヤー
+            {props.t("対戦者", "Contestants")}
             <input
               type="number"
               min="1"
@@ -1030,12 +1154,12 @@ function HostView(props: {
               checked={props.room.settings.autoOdds}
               onChange={(event) => props.onSettingChange("autoOdds", event.target.checked)}
             />
-            自動オッズ
+            {props.t("自動オッズ", "Auto odds")}
           </label>
         </div>
         <button className="secondary-button full" type="button" onClick={props.onAutoOdds}>
           <Sparkles size={18} />
-          強さ/CPU Lvから倍率更新
+          {props.t("強さ/CPU Lvから倍率更新", "Update odds from strength / CPU Lv")}
         </button>
       </section>
 
@@ -1043,12 +1167,12 @@ function HostView(props: {
         <div className="section-heading">
           <Users size={20} />
           <div>
-            <h2>参加者</h2>
-            <p>代行入力対象もここで登録</p>
+            <h2>{props.t("参加者", "Bettors")}</h2>
+            <p>{props.t("代行入力する人もここで登録", "Register proxy players here too")}</p>
           </div>
         </div>
         <div className="inline-form">
-          <input value={props.newPlayerName} onChange={(event) => props.setNewPlayerName(event.target.value)} placeholder="名前" />
+          <input value={props.newPlayerName} onChange={(event) => props.setNewPlayerName(event.target.value)} placeholder={props.t("名前", "Name")} />
           <input
             className="small-input"
             type="number"
@@ -1056,7 +1180,7 @@ function HostView(props: {
             max="9"
             value={props.newPlayerSkill}
             onChange={(event) => props.setNewPlayerSkill(Number(event.target.value))}
-            aria-label="参加者の強さ"
+            aria-label={props.t("参加者の強さ", "Bettor strength")}
           />
           <label className="toggle-label">
             <input
@@ -1064,27 +1188,34 @@ function HostView(props: {
               checked={props.newPlayerOffline}
               onChange={(event) => props.setNewPlayerOffline(event.target.checked)}
             />
-            代行
+            {props.t("代行", "Proxy")}
           </label>
-          <button type="button" onClick={props.onAddPlayer} aria-label="参加者を追加">
+          <button type="button" onClick={props.onAddPlayer} aria-label={props.t("参加者を追加", "Add bettor")}>
             <Plus size={18} />
           </button>
         </div>
+        <EmojiPicker value={props.newPlayerEmoji} onChange={props.setNewPlayerEmoji} label={props.t("追加する参加者のアイコン", "Icon for the new bettor")} />
         <div className="player-grid">
           {props.room.players.map((player) => (
             <div className="mini-player" key={player.id}>
               <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
-                {player.name.slice(0, 1)}
+                {player.emoji}
               </span>
               <strong>{player.name}</strong>
-              <span>{player.isOffline ? "代行" : "本人"} / 強さ{player.skillRating}</span>
+              <span>{player.isOffline ? props.t("代行", "Proxy") : props.t("本人", "Self")} / {props.t("強さ", "Power")} {player.skillRating}</span>
+              <EmojiPicker
+                value={player.emoji}
+                onChange={(emoji) => props.onPlayerEmojiChange(player.id, emoji)}
+                label={props.t(`${player.name}のアイコン`, `${player.name}'s icon`)}
+                compact
+              />
               <input
                 type="range"
                 min="1"
                 max="9"
                 value={player.skillRating}
                 onChange={(event) => props.onPlayerSkillChange(player.id, Number(event.target.value))}
-                aria-label={`${player.name}の強さ`}
+                aria-label={props.t(`${player.name}の強さ`, `${player.name}'s strength`)}
               />
             </div>
           ))}
@@ -1095,15 +1226,15 @@ function HostView(props: {
         <div className="section-heading">
           <Settings2 size={20} />
           <div>
-            <h2>オッズ設定</h2>
-            <p>勝負ごとに倍率を手動調整</p>
+            <h2>{props.t("オッズ設定", "Odds Settings")}</h2>
+            <p>{props.t("強さに合わせて自動、または倍率を手動調整", "Auto-adjust by power or edit odds manually")}</p>
           </div>
         </div>
         <div className="inline-form">
           <input
             value={props.newContestantName}
             onChange={(event) => props.setNewContestantName(event.target.value)}
-            placeholder="対象名"
+            placeholder={props.t("対戦者名", "Contestant")}
           />
           <input
             className="small-input"
@@ -1112,7 +1243,7 @@ function HostView(props: {
             max="9"
             value={props.newContestantCpuLevel}
             onChange={(event) => props.setNewContestantCpuLevel(Number(event.target.value))}
-            aria-label="CPU Lv"
+            aria-label={props.t("CPUレベル", "CPU level")}
           />
           <input
             className="odds-input"
@@ -1128,16 +1259,17 @@ function HostView(props: {
               checked={props.newContestantIsCpu}
               onChange={(event) => props.setNewContestantIsCpu(event.target.checked)}
             />
-            CPU
+            {props.t("CPU", "CPU")}
           </label>
-          <button type="button" onClick={props.onAddContestant} aria-label="競走対象を追加">
+          <button type="button" onClick={props.onAddContestant} aria-label={props.t("対戦者を追加", "Add contestant")}>
             <Plus size={18} />
           </button>
         </div>
+        <EmojiPicker value={props.newContestantEmoji} onChange={props.setNewContestantEmoji} label={props.t("追加する対戦者のアイコン", "Icon for the new contestant")} />
         {props.room.contestants.map((contestant) => (
           <div className="odds-row expanded" key={contestant.id}>
             <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
-              {contestant.name.slice(0, 1)}
+              {contestant.icon}
             </span>
             <strong>{contestant.name}</strong>
             <label className="toggle-label compact">
@@ -1146,10 +1278,10 @@ function HostView(props: {
                 checked={contestant.isCpu}
                 onChange={(event) => props.onContestantStrengthChange(contestant.id, { isCpu: event.target.checked })}
               />
-              CPU
+              {props.t("CPU", "CPU")}
             </label>
             <label>
-              強さ
+              {props.t("強さ", "Power")}
               <input
                 type="number"
                 min="1"
@@ -1179,6 +1311,12 @@ function HostView(props: {
               value={contestant.odds}
               onChange={(event) => props.onOddsChange(contestant.id, Number(event.target.value))}
             />
+            <EmojiPicker
+              value={contestant.icon}
+              onChange={(emoji) => props.onContestantStrengthChange(contestant.id, { icon: emoji })}
+              label={props.t(`${contestant.name}のアイコン`, `${contestant.name}'s icon`)}
+              compact
+            />
           </div>
         ))}
       </section>
@@ -1187,12 +1325,12 @@ function HostView(props: {
         <div className="section-heading">
           <BarChart3 size={20} />
           <div>
-            <h2>BET状況</h2>
-            <p>{props.room.currentRace.bets.length}件のBETを受付済み</p>
+            <h2>{props.t("ベット状況", "Bet Status")}</h2>
+            <p>{props.t(`${props.room.currentRace.bets.length}件のベットを受付済み`, `${props.room.currentRace.bets.length} bets placed`)}</p>
           </div>
         </div>
         <div className="bet-log">
-          {props.room.currentRace.bets.length === 0 && <p className="muted">まだBETはありません。</p>}
+          {props.room.currentRace.bets.length === 0 && <p className="muted">{props.t("まだベットはありません。", "No bets yet.")}</p>}
           {props.room.currentRace.bets.map((bet) => {
             const player = props.room.players.find((item) => item.id === bet.playerId);
             const betTarget = getBetPickIds(bet)
@@ -1203,9 +1341,9 @@ function HostView(props: {
               <div className="bet-log-row" key={bet.id}>
                 <span>{player?.name ?? "Unknown"}</span>
                 <strong>{betTarget || "Unknown"}</strong>
-                <span>{betTypeLabels[bet.type].title}</span>
+                <span>{props.betTypeLabels[bet.type].title}</span>
                 <strong>{currency.format(bet.amount)}</strong>
-                {bet.placedBy === "host" && <em>代行</em>}
+                {bet.placedBy === "host" && <em>{props.t("代行", "Proxy")}</em>}
               </div>
             );
           })}
@@ -1216,8 +1354,8 @@ function HostView(props: {
         <div className="section-heading">
           <Trophy size={20} />
           <div>
-            <h2>結果入力</h2>
-            <p>1位から順にタップして確定</p>
+            <h2>{props.t("結果入力", "Enter Results")}</h2>
+            <p>{props.t("1位から順にタップして確定", "Tap players in finishing order")}</p>
           </div>
         </div>
         <div className="result-picks">
@@ -1230,56 +1368,56 @@ function HostView(props: {
                 key={contestant.id}
                 onClick={() => props.onResultPick(contestant.id)}
               >
-                <span>{position >= 0 ? `${position + 1}位` : "-"}</span>
-                {contestant.name}
+                <span>{position >= 0 ? props.t(`${position + 1}位`, `#${position + 1}`) : "-"}</span>
+                {contestant.icon} {contestant.name}
               </button>
             );
           })}
         </div>
         <button className="primary-button" type="button" onClick={props.onSettle}>
-          結果を確定
+          {props.t("結果を確定", "Settle Results")}
           <Check size={20} />
         </button>
         <button className="secondary-button full" type="button" onClick={props.onNextRace}>
           <RotateCcw size={18} />
-          次の勝負へ
+          {props.t("次の勝負へ", "Next round")}
         </button>
       </section>
     </div>
   );
 }
 
-function RankingView(props: { room: Room; ranking: Player[] }) {
+function RankingView(props: { room: Room; ranking: Player[]; t: Translate }) {
   return (
     <div className="screen-stack">
       <section className="leader-preview full">
         <div className="section-heading">
           <Crown size={20} />
           <div>
-            <h2>リアルタイムランキング</h2>
-            <p>破産者は0コインで固定表示</p>
+            <h2>{props.t("リアルタイムランキング", "Live Ranking")}</h2>
+            <p>{props.t("コインが0になった人も表示します", "Players at 0 coins stay visible")}</p>
           </div>
         </div>
         {props.ranking.map((player, index) => (
-          <PlayerRankRow key={player.id} player={player} rank={index + 1} />
+          <PlayerRankRow key={player.id} player={player} rank={index + 1} t={props.t} />
         ))}
       </section>
 
       {props.room.currentRace.status === "settled" && (
         <section className="result-summary">
           <div className="section-heading">
-            <Medal size={20} />
-            <div>
-              <h2>確定結果</h2>
-              <p>配当計算済み</p>
+              <Medal size={20} />
+              <div>
+              <h2>{props.t("確定結果", "Final Results")}</h2>
+              <p>{props.t("配当計算済み", "Payouts applied")}</p>
+              </div>
             </div>
-          </div>
           {props.room.currentRace.resultIds.map((id, index) => {
             const contestant = getContestant(props.room, id);
             return (
               <div className="result-line" key={id}>
                 <span>{index + 1}</span>
-                <strong>{contestant?.name ?? "Unknown"}</strong>
+                <strong>{contestant ? `${contestant.icon} ${contestant.name}` : "Unknown"}</strong>
               </div>
             );
           })}
@@ -1299,15 +1437,35 @@ function Metric(props: { icon: ReactNode; label: string; value: string }) {
   );
 }
 
-function PlayerRankRow(props: { player: Player; rank: number; compact?: boolean }) {
+function EmojiPicker(props: { value: string; onChange: (emoji: string) => void; label: string; compact?: boolean }) {
+  const choices = props.compact ? emojiChoices.slice(0, 12) : emojiChoices;
+
+  return (
+    <div className={props.compact ? "emoji-picker compact" : "emoji-picker"} aria-label={props.label}>
+      {choices.map((emoji) => (
+        <button
+          className={props.value === emoji ? "selected" : ""}
+          key={emoji}
+          type="button"
+          onClick={() => props.onChange(emoji)}
+          aria-label={`${props.label}: ${emoji}`}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PlayerRankRow(props: { player: Player; rank: number; compact?: boolean; t: Translate }) {
   return (
     <div className={props.player.balance <= 0 ? "rank-row bankrupt" : "rank-row"}>
       <span className="rank-number">{props.rank}</span>
       <span className="avatar" style={{ "--accent": props.player.accent } as CSSProperties}>
-        {props.player.name.slice(0, 1)}
+        {props.player.emoji}
       </span>
       <strong>{props.player.name}</strong>
-      {!props.compact && <span>{props.player.isOffline ? "代行参加" : "本人参加"}</span>}
+      {!props.compact && <span>{props.player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</span>}
       <span className="coin">
         <CircleDollarSign size={16} />
         {currency.format(props.player.balance)}
@@ -1316,16 +1474,16 @@ function PlayerRankRow(props: { player: Player; rank: number; compact?: boolean 
   );
 }
 
-function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (tab: TabKey) => void }) {
+function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (tab: TabKey) => void; t: Translate }) {
   const tabs: Array<{ key: TabKey; label: string; icon: ReactNode; hostOnly?: boolean }> = [
-    { key: "home", label: "ホーム", icon: <Home size={22} /> },
-    { key: "bet", label: "BET", icon: <Zap size={22} /> },
-    { key: "host", label: "管理", icon: <Settings2 size={22} />, hostOnly: true },
-    { key: "ranking", label: "順位", icon: <Wallet size={22} /> },
+    { key: "home", label: props.t("ホーム", "Home"), icon: <Home size={22} /> },
+    { key: "bet", label: props.t("ベット", "Bet"), icon: <Zap size={22} /> },
+    { key: "host", label: props.t("管理", "Host"), icon: <Settings2 size={22} />, hostOnly: true },
+    { key: "ranking", label: props.t("順位", "Ranks"), icon: <Wallet size={22} /> },
   ];
 
   return (
-    <nav className="bottom-nav" aria-label="メインナビゲーション">
+    <nav className="bottom-nav" aria-label={props.t("メインナビゲーション", "Main navigation")}>
       {tabs
         .filter((item) => props.role === "host" || !item.hostOnly)
         .map((item) => (

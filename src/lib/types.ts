@@ -1,6 +1,7 @@
 export type BetType = "win" | "place" | "exacta" | "trifecta";
 export type RaceStatus = "setup" | "betting" | "closed" | "settled";
-export type ThemeName = "neon" | "pop" | "minimal" | "party";
+export type ThemeName = "neon" | "pop" | "minimal" | "party" | "garden" | "candy" | "sky";
+export type LanguageName = "ja" | "en";
 export type AppRole = "host" | "player";
 
 export type RoomSettings = {
@@ -16,6 +17,7 @@ export type Player = {
   isOffline: boolean;
   accent: string;
   skillRating: number;
+  emoji: string;
 };
 
 export type Contestant = {
