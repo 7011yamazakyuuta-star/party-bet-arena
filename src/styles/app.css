@@ -399,7 +399,9 @@ h2 {
 .payout-preview,
 .host-panel,
 .jackpot,
-.result-summary {
+.result-summary,
+.sync-alert,
+.result-mode-panel {
   border: 1px solid var(--line);
   background: var(--surface);
   backdrop-filter: blur(18px);
@@ -459,14 +461,24 @@ h2 {
 
 .timer {
   flex: 0 0 auto;
-  display: inline-flex;
+  display: inline-grid;
   align-items: center;
-  gap: 8px;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
   color: var(--accent);
   background: rgba(0, 0, 0, 0.22);
+}
+
+.timer svg {
+  grid-row: span 2;
+}
+
+.timer small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .jackpot {
@@ -516,9 +528,28 @@ h2 {
 .amount-panel,
 .payout-preview,
 .host-panel,
-.result-summary {
+.result-summary,
+.sync-alert,
+.result-mode-panel {
   padding: 16px;
   border-radius: 22px;
+}
+
+.sync-alert {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin: -4px 0 14px;
+  border-color: rgba(255, 111, 145, 0.42);
+  color: var(--danger);
+}
+
+.sync-alert p {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .section-heading {
@@ -999,13 +1030,13 @@ select option {
 
 .inline-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px 82px 72px 46px;
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-bottom: 12px;
 }
 
 .inline-form button {
-  width: 46px;
+  width: 100%;
   height: 48px;
   border-radius: 14px;
 }
@@ -1034,34 +1065,35 @@ select option {
 }
 
 .small-input {
-  width: 70px;
+  width: 100%;
 }
 
 .odds-input {
-  width: 82px;
+  width: 100%;
 }
 
 .player-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
 .mini-player {
   min-width: 0;
   display: grid;
-  grid-template-columns: 36px 1fr;
-  gap: 7px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px 10px;
   align-items: center;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .mini-player .avatar {
-  width: 36px;
-  height: 36px;
-  grid-row: span 3;
+  width: 46px;
+  height: 46px;
+  grid-row: span 2;
 }
 
 .mini-player strong {
@@ -1077,7 +1109,7 @@ select option {
 }
 
 .mini-player input[type="range"] {
-  grid-column: 2;
+  grid-column: 1 / -1;
   width: 100%;
   min-height: 28px;
   padding: 0;
@@ -1091,8 +1123,8 @@ select option {
 }
 
 .emoji-picker.compact {
-  grid-column: 2;
-  grid-template-columns: repeat(6, 28px);
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin: 0;
 }
 
@@ -1134,10 +1166,22 @@ select option {
 }
 
 .odds-row.expanded {
-  grid-template-columns: 42px minmax(70px, 1fr) 58px 52px 44px 64px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .odds-row.expanded .emoji-picker {
+  grid-column: 1 / -1;
+}
+
+.odds-row.expanded > .toggle-label,
+.odds-row.expanded > label,
+.odds-row.expanded > input {
   grid-column: 1 / -1;
 }
 
@@ -1156,8 +1200,15 @@ select option {
 }
 
 .bet-log-row {
-  grid-template-columns: 1fr 1fr auto auto auto;
+  grid-template-columns: 1fr auto;
   font-size: 13px;
+}
+
+.bet-log-row strong,
+.bet-log-row span,
+.bet-log-row em {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .bet-log-row em {
@@ -1191,6 +1242,335 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.view-toggle button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 13px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 900;
+}
+
+.view-toggle button.selected {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.ticket-board {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.ticket-board-head,
+.ticket-row {
+  display: grid;
+  grid-template-columns: 38px 1fr 68px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-board-head {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.ticket-row {
+  min-height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+:root:not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .ticket-row {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ticket-row.selected,
+.matrix-cell.selected,
+.third-pick-strip button.selected {
+  border-color: var(--line-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.horse-number,
+.matrix-head,
+.matrix-side span {
+  width: 32px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.matrix-scroll {
+  --matrix-count: 4;
+  display: grid;
+  grid-template-columns: 72px repeat(var(--matrix-count), 72px);
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+}
+
+.matrix-corner,
+.matrix-head,
+.matrix-side,
+.matrix-cell {
+  min-height: 48px;
+}
+
+.matrix-corner,
+.matrix-side {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  border-radius: 12px;
+  background: var(--surface-strong);
+}
+
+.matrix-corner {
+  place-items: center;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.matrix-head {
+  width: auto;
+  color: #fff;
+}
+
+.matrix-row-fragment {
+  display: contents;
+}
+
+.matrix-side {
+  grid-template-columns: 30px 1fr;
+  gap: 5px;
+  padding: 5px;
+}
+
+.matrix-side strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.matrix-cell {
+  display: grid;
+  gap: 1px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+:root:not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .matrix-cell {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.matrix-cell:disabled {
+  opacity: 0.28;
+}
+
+.matrix-cell span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.matrix-cell strong {
+  font-size: 14px;
+}
+
+.third-pick-strip {
+  display: grid;
+  grid-template-columns: auto repeat(auto-fit, minmax(34px, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+
+.third-pick-strip span,
+.board-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.third-pick-strip button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.third-pick-strip button:disabled {
+  opacity: 0.38;
+}
+
+.bonus-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bonus-panel div {
+  display: grid;
+  gap: 3px;
+}
+
+.bonus-panel span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.host-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.result-mode-panel {
+  grid-column: 1 / -1;
+  padding: 8px;
+}
+
+.podium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.podium-card {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  text-align: center;
+}
+
+.podium-card .avatar {
+  width: 52px;
+  height: 52px;
+}
+
+.podium-card strong,
+.podium-card b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.podium-card b {
+  color: var(--warn);
+}
+
+.result-summary.full {
+  grid-column: 1 / -1;
+}
+
+.result-order-strip {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.result-order-strip span,
+.payout-row,
+.race-ledger-head,
+.race-ledger-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.result-order-strip span {
+  grid-template-columns: 30px 1fr;
+  min-height: 42px;
+  padding: 6px 9px;
+}
+
+.result-order-strip b {
+  color: var(--warn);
+}
+
+.payout-table,
+.race-ledger {
+  display: grid;
+  gap: 7px;
+}
+
+.payout-row {
+  grid-template-columns: 1fr;
+  padding: 10px;
+}
+
+.payout-row.plus b {
+  color: var(--accent);
+}
+
+.payout-row.minus b {
+  color: var(--danger);
+}
+
+.race-ledger {
+  margin-top: 12px;
+}
+
+.race-ledger-head,
+.race-ledger-row {
+  grid-template-columns: 58px 1fr;
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.race-ledger-head {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .result-picks {
@@ -1321,6 +1701,49 @@ select option {
   .result-summary,
   .sticky-action {
     grid-column: 1 / -1;
+  }
+
+  .inline-form {
+    grid-template-columns: minmax(0, 1fr) 70px 82px 72px 46px;
+  }
+
+  .inline-form button {
+    width: 46px;
+  }
+
+  .small-input {
+    width: 70px;
+  }
+
+  .odds-input {
+    width: 82px;
+  }
+
+  .player-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bonus-panel {
+    grid-template-columns: 1fr 150px 110px 96px;
+    align-items: end;
+  }
+
+  .odds-row.expanded {
+    grid-template-columns: 48px minmax(80px, 1fr) 70px 64px 54px 76px;
+  }
+
+  .odds-row.expanded > .toggle-label,
+  .odds-row.expanded > label,
+  .odds-row.expanded > input {
+    grid-column: auto;
+  }
+
+  .bet-log-row {
+    grid-template-columns: 1fr 1fr auto auto auto;
+  }
+
+  .payout-row {
+    grid-template-columns: 1fr auto auto 78px;
   }
 }
 

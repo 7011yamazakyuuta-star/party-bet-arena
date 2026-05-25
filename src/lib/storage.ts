@@ -79,6 +79,10 @@ export function normalizeRoom(room: Room): Room {
       ...room.settings,
       maxPlayers: Math.min(8, Math.max(1, room.settings?.maxPlayers ?? fallback.settings.maxPlayers)),
       maxContestants: Math.min(8, Math.max(1, room.settings?.maxContestants ?? fallback.settings.maxContestants)),
+      maxRaces: Math.min(15, Math.max(1, room.settings?.maxRaces ?? fallback.settings.maxRaces)),
+      marketOdds: room.settings?.marketOdds ?? fallback.settings.marketOdds,
+      allowDebt: room.settings?.allowDebt ?? fallback.settings.allowDebt,
+      specialBonus: Math.max(0, Math.floor(room.settings?.specialBonus ?? fallback.settings.specialBonus)),
     },
     players: (room.players ?? fallback.players).map((player, index) => ({
       ...player,
@@ -95,11 +99,25 @@ export function normalizeRoom(room: Room): Room {
     currentRace: {
       ...fallback.currentRace,
       ...room.currentRace,
+      startedAt: room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
+      endsAt: room.currentRace?.endsAt ?? room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
       bets: (room.currentRace?.bets ?? []).map((bet) => ({
         ...bet,
         contestantIds: bet.contestantIds?.length ? bet.contestantIds : [bet.contestantId],
       })),
       resultIds: room.currentRace?.resultIds ?? [],
     },
+    raceHistory: (room.raceHistory ?? []).map((entry) => ({
+      ...entry,
+      resultIds: entry.resultIds ?? [],
+      payouts: (entry.payouts ?? []).map((payout) => ({
+        ...payout,
+        stake: payout.stake ?? 0,
+        payout: payout.payout ?? 0,
+        delta: payout.delta ?? 0,
+        balanceAfter: payout.balanceAfter ?? 0,
+        hits: payout.hits ?? 0,
+      })),
+    })),
   };
 }

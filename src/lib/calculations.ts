@@ -1,8 +1,9 @@
-import type { Bet, BetType, Contestant, DraftBet, Player, Room } from "./types";
+import type { Bet, BetType, Contestant, DraftBet, Player, RacePayout, Room } from "./types";
 
 export const currency = new Intl.NumberFormat("ja-JP");
 export const maxParticipantLimit = 8;
 export const maxRating = 9;
+export const maxRaceLimit = 15;
 
 export function getContestant(room: Room, contestantId: string) {
   return room.contestants.find((contestant) => contestant.id === contestantId);
@@ -25,13 +26,17 @@ export function getBetPickIds(bet: Pick<Bet, "contestantId"> & Partial<Pick<Bet,
 export function calculateAutoOdds(contestants: Contestant[]) {
   const powers = contestants.map((contestant) => {
     const rating = contestant.isCpu ? contestant.cpuLevel : contestant.strengthRating;
-    return Math.pow(Math.max(1, Math.min(9, rating)), 1.45);
+    const normalizedRating = Math.max(1, Math.min(9, rating));
+    return Math.exp((normalizedRating - 5) * 0.36);
   });
   const totalPower = powers.reduce((sum, power) => sum + power, 0) || 1;
+  const maxOdds = Math.min(20, Math.max(8, contestants.length * 3.2));
 
   return contestants.map((contestant, index) => {
-    const fairOdds = totalPower / powers[index];
-    const odds = Math.max(1.1, Math.min(9.9, Number((fairOdds * 0.58).toFixed(1))));
+    const winProbability = powers[index] / totalPower;
+    const fairOdds = 1 / Math.max(0.001, winProbability);
+    const playableOdds = 1 + (fairOdds - 1) * 0.72;
+    const odds = Math.max(1.1, Math.min(maxOdds, Number(playableOdds.toFixed(1))));
     return { ...contestant, odds };
   });
 }
@@ -44,6 +49,37 @@ export function placeMultiplier(type: BetType, contestants: Contestant[]) {
   if (type === "place") return Math.max(1.1, Number((contestants[0].odds * 0.52).toFixed(2)));
   if (type === "exacta") return Math.max(1.3, Number((oddsProduct * 0.72).toFixed(2)));
   return Math.max(1.6, Number((oddsProduct * 0.88).toFixed(2)));
+}
+
+function getOutcomeKey(type: BetType, contestantIds: string[]) {
+  if (type === "win" || type === "place") return contestantIds[0] ?? "";
+  return contestantIds.slice(0, requiredPickCount(type)).join(">");
+}
+
+function clampMultiplier(type: BetType, multiplier: number) {
+  const maxMultiplier = type === "trifecta" ? 80 : type === "exacta" ? 50 : type === "place" ? 20 : 30;
+  return Math.max(1.05, Math.min(maxMultiplier, Number(multiplier.toFixed(2))));
+}
+
+export function getEffectiveMultiplier(room: Room, type: BetType, contestants: Contestant[]) {
+  const baseMultiplier = placeMultiplier(type, contestants);
+  if (!baseMultiplier || !room.settings.marketOdds) return baseMultiplier;
+
+  const targetIds = contestants.map((contestant) => contestant.id);
+  const targetKey = getOutcomeKey(type, targetIds);
+  const typeBets = room.currentRace.bets.filter((bet) => bet.type === type);
+  const pool = typeBets.reduce((sum, bet) => sum + bet.amount, 0);
+  if (pool <= 0) return baseMultiplier;
+
+  const outcomeStake = typeBets
+    .filter((bet) => getOutcomeKey(type, getBetPickIds(bet)) === targetKey)
+    .reduce((sum, bet) => sum + bet.amount, 0);
+  const virtualPool = Math.max(240, room.contestants.length * 90);
+  const payoutRate = 0.92;
+  const virtualOutcomeStake = (virtualPool * payoutRate) / baseMultiplier;
+  const marketMultiplier = ((pool + virtualPool) * payoutRate) / (outcomeStake + virtualOutcomeStake);
+
+  return clampMultiplier(type, marketMultiplier);
 }
 
 export function isBetHit(type: BetType, contestantIds: string[], resultIds: string[]) {
@@ -82,7 +118,7 @@ export function getPotentialPayout(room: Room, draft: DraftBet) {
     .map((contestantId) => getContestant(room, contestantId))
     .filter((contestant): contestant is Contestant => Boolean(contestant));
   if (contestants.length !== requiredPickCount(draft.type)) return 0;
-  return Math.floor(draft.amount * placeMultiplier(draft.type, contestants));
+  return Math.floor(draft.amount * getEffectiveMultiplier(room, draft.type, contestants));
 }
 
 export function validateBet(room: Room, draft: DraftBet) {
@@ -96,7 +132,7 @@ export function validateBet(room: Room, draft: DraftBet) {
     return "同じ対象を複数順位に選ぶことはできません。";
   }
   if (!Number.isFinite(draft.amount) || draft.amount <= 0) return "BET額を入力してください。";
-  if (draft.amount > getAvailableBalance(room, draft.playerId)) {
+  if (!room.settings.allowDebt && draft.amount > getAvailableBalance(room, draft.playerId)) {
     return "利用可能コインを超えています。";
   }
   return null;
@@ -116,7 +152,18 @@ export function createBet(draft: DraftBet): Bet {
 }
 
 export function settleRoom(room: Room, resultIds: string[]) {
+  const settledAt = Date.now();
+  const payoutRows = new Map<string, RacePayout>();
+
   const nextPlayers = room.players.map((player) => {
+    const summary: RacePayout = {
+      playerId: player.id,
+      stake: 0,
+      payout: 0,
+      delta: 0,
+      balanceAfter: player.balance,
+      hits: 0,
+    };
     const playerBets = room.currentRace.bets.filter((bet) => bet.playerId === player.id);
     const balance = playerBets.reduce((current, bet) => {
       const contestants = getBetPickIds(bet)
@@ -124,42 +171,69 @@ export function settleRoom(room: Room, resultIds: string[]) {
         .filter((contestant): contestant is Contestant => Boolean(contestant));
       if (contestants.length !== requiredPickCount(bet.type)) return current;
       const afterStake = current - bet.amount;
+      summary.stake += bet.amount;
 
       if (!isBetHit(bet.type, getBetPickIds(bet), resultIds)) {
-        return Math.max(0, afterStake);
+        return room.settings.allowDebt ? afterStake : Math.max(0, afterStake);
       }
 
-      return Math.max(0, afterStake + Math.floor(bet.amount * placeMultiplier(bet.type, contestants)));
+      const payout = Math.floor(bet.amount * getEffectiveMultiplier(room, bet.type, contestants));
+      summary.payout += payout;
+      summary.hits += 1;
+      const afterPayout = afterStake + payout;
+      return room.settings.allowDebt ? afterPayout : Math.max(0, afterPayout);
     }, player.balance);
+
+    summary.delta = balance - player.balance;
+    summary.balanceAfter = balance;
+    payoutRows.set(player.id, summary);
 
     return { ...player, balance };
   });
 
+  const historyEntry = {
+    raceId: room.currentRace.id,
+    raceTitle: room.currentRace.title,
+    settledAt,
+    resultIds,
+    payouts: room.players.map((player) => payoutRows.get(player.id)).filter((row): row is RacePayout => Boolean(row)),
+  };
+  const raceHistory = [
+    ...(room.raceHistory ?? []).filter((entry) => entry.raceId !== room.currentRace.id),
+    historyEntry,
+  ].slice(-maxRaceLimit);
+
   return {
     ...room,
     players: nextPlayers,
+    raceHistory,
     currentRace: {
       ...room.currentRace,
       status: "settled" as const,
       resultIds,
-      settledAt: Date.now(),
+      settledAt,
     },
-    updatedAt: Date.now(),
+    updatedAt: settledAt,
   };
 }
 
 export function startNextRace(room: Room) {
+  const now = Date.now();
+  const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
+  const nextRaceNumber = Math.min(room.settings.maxRaces, currentRaceNumber + 1);
+
   return {
     ...room,
     currentRace: {
       id: `race-${crypto.randomUUID()}`,
-      title: `Round ${Number(room.currentRace.title.replace(/\D/g, "")) + 1 || 2}`,
+      title: `第${nextRaceNumber}レース`,
       status: "betting" as const,
-      endsAt: Date.now() + 1000 * 60 * 10,
+      startedAt: now,
+      endsAt: now,
       bets: [],
       resultIds: [],
     },
-    updatedAt: Date.now(),
+    updatedAt: now,
   };
 }
 
@@ -169,6 +243,10 @@ export function rankedPlayers(players: Player[]) {
 
 export function clampCount(value: number) {
   return Math.max(1, Math.min(maxParticipantLimit, Math.floor(value)));
+}
+
+export function clampRaceCount(value: number) {
+  return Math.max(1, Math.min(maxRaceLimit, Math.floor(value)));
 }
 
 export function clampRating(value: number) {

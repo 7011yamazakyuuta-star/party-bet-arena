@@ -28,13 +28,18 @@ export const createInitialRoom = (): Room => ({
     maxPlayers: 8,
     maxContestants: 8,
     autoOdds: true,
+    marketOdds: true,
+    allowDebt: true,
+    maxRaces: 15,
+    specialBonus: 10,
   },
   players: defaultPlayers,
   contestants: defaultContestants,
   currentRace: {
     id: "race-1",
-    title: "Round 1",
+    title: "第1レース",
     status: "betting",
+    startedAt: now,
     endsAt: now + 1000 * 60 * 12,
     bets: [
       {
@@ -60,6 +65,7 @@ export const createInitialRoom = (): Room => ({
     ],
     resultIds: [],
   },
+  raceHistory: [],
   createdAt: now,
   updatedAt: now,
 });
@@ -75,12 +81,14 @@ export const createBlankRoom = (name = "みんなBET Arena"): Room => {
     name,
     isDemo: false,
     joinCode,
+    startingBalance: 50,
     players: [],
     contestants: base.contestants.map((contestant) => ({ ...contestant })),
     currentRace: {
       ...base.currentRace,
       id: `race-${crypto.randomUUID()}`,
       bets: [],
+      startedAt: Date.now(),
       endsAt: Date.now() + 1000 * 60 * 10,
       resultIds: [],
     },

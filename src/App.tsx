@@ -25,15 +25,16 @@ import {
 import {
   calculateAutoOdds,
   clampCount,
+  clampRaceCount,
   clampRating,
   createBet,
   currency,
   getAvailableBalance,
   getBetPickIds,
   getContestant,
+  getEffectiveMultiplier,
   getPotentialPayout,
   isBetHit,
-  placeMultiplier,
   rankedPlayers,
   requiredPickCount,
   settleRoom,
@@ -41,12 +42,20 @@ import {
   validateBet,
 } from "./lib/calculations";
 import { createBlankRoom } from "./lib/sample";
-import { fetchFirebaseRoom, isFirebaseConfigured, saveFirebaseRoom, subscribeFirebaseRoom } from "./lib/firebase";
+import {
+  fetchFirebaseRoom,
+  getFirebaseIssueKind,
+  isFirebaseConfigured,
+  saveFirebaseRoom,
+  subscribeFirebaseRoom,
+} from "./lib/firebase";
 import { loadRoom, loadSession, resetLocalRoom, saveRoom, saveSession } from "./lib/storage";
 import type { BetType, DraftBet, LanguageName, Player, Room, ThemeName } from "./lib/types";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
+type BetDisplayMode = "cards" | "board";
+type ResultDisplayMode = "ranking" | "payouts";
 
 const themeOrder: ThemeName[] = ["party", "garden", "candy", "sky", "neon", "pop", "minimal"];
 const emojiChoices = [
@@ -122,6 +131,38 @@ function translateBetError(error: string, t: Translate) {
   return t(error, messages[error] ?? error);
 }
 
+function getFirebaseIssueCopy(error: unknown, t: Translate) {
+  const kind = getFirebaseIssueKind(error);
+  if (kind === "anonymous-auth") {
+    return t(
+      "Firebaseの匿名ログインが無効です。Firebase Console の Authentication > Sign-in method で「匿名」を有効にしてください。",
+      "Anonymous sign-in is disabled. Enable Anonymous in Firebase Console > Authentication > Sign-in method.",
+    );
+  }
+  if (kind === "permission") {
+    return t(
+      "Firebaseの保存権限が拒否されました。Realtime Database のルールを公開したか、匿名ログインが有効か確認してください。",
+      "Firebase denied the save. Check Realtime Database rules and Anonymous sign-in.",
+    );
+  }
+  if (kind === "database-url") {
+    return t(
+      "Firebase Database URL が違う可能性があります。GitHub Actions Variables の VITE_FIREBASE_DATABASE_URL を Realtime Database のURLにしてください。",
+      "The Firebase Database URL may be wrong. Set VITE_FIREBASE_DATABASE_URL to the Realtime Database URL.",
+    );
+  }
+  if (kind === "network") {
+    return t(
+      "通信に失敗しました。電波状況、広告ブロック、またはFirebase側の一時的な接続を確認してください。",
+      "Network sync failed. Check connection, blockers, or Firebase availability.",
+    );
+  }
+  return t(
+    "Firebase保存に失敗しました。端末内の状態は残っています。DB作成、URL、ルール、匿名ログインを確認してください。",
+    "Firebase save failed. Local state is kept. Check database, URL, rules, and Anonymous sign-in.",
+  );
+}
+
 function App() {
   const [room, setRoom] = useState(loadRoom);
   const [session, setSession] = useState(loadSession);
@@ -130,6 +171,8 @@ function App() {
   const [selectedPickIds, setSelectedPickIds] = useState<string[]>(room.contestants[0]?.id ? [room.contestants[0].id] : []);
   const [betType, setBetType] = useState<BetType>("win");
   const [amount, setAmount] = useState(100);
+  const [betDisplayMode, setBetDisplayMode] = useState<BetDisplayMode>("board");
+  const [resultDisplayMode, setResultDisplayMode] = useState<ResultDisplayMode>("ranking");
   const [proxyPlayerId, setProxyPlayerId] = useState(room.players[0]?.id ?? "");
   const [joinName, setJoinName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState(room.id);
@@ -144,8 +187,11 @@ function App() {
   const [newContestantCpuLevel, setNewContestantCpuLevel] = useState(7);
   const [newContestantIsCpu, setNewContestantIsCpu] = useState(true);
   const [newContestantEmoji, setNewContestantEmoji] = useState("🤖");
+  const [bonusPlayerId, setBonusPlayerId] = useState(room.players[0]?.id ?? "");
+  const [bonusAmount, setBonusAmount] = useState(room.settings.specialBonus);
   const [resultIds, setResultIds] = useState<string[]>(room.currentRace.resultIds);
   const [toast, setToast] = useState("");
+  const [syncIssue, setSyncIssue] = useState("");
   const [tick, setTick] = useState(Date.now());
   const language = session.language ?? "ja";
   const t: Translate = (ja, en) => (language === "ja" ? ja : en);
@@ -185,6 +231,13 @@ function App() {
   }, [proxyPlayerId, room.players, session.role]);
 
   useEffect(() => {
+    if (!room.players.length) return;
+    if (!room.players.some((player) => player.id === bonusPlayerId)) {
+      setBonusPlayerId(room.players[0].id);
+    }
+  }, [bonusPlayerId, room.players]);
+
+  useEffect(() => {
     if (!isFirebaseConfigured || room.isDemo) return;
 
     let unsubscribe: undefined | (() => void);
@@ -214,7 +267,8 @@ function App() {
     placedBy: session.role === "host" ? "host" : "self",
   };
   const potentialPayout = getPotentialPayout(room, draftBet);
-  const timeLeft = formatTime(room.currentRace.endsAt - tick);
+  const elapsedTime = formatTime(tick - room.currentRace.startedAt);
+  const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
   const publicUrl = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname;
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
@@ -225,8 +279,12 @@ function App() {
     setRoom(nextRoom);
     saveRoom(nextRoom);
     if (sync && isFirebaseConfigured && !nextRoom.isDemo) {
-      saveFirebaseRoom(nextRoom).catch(() => {
-        setToast(t("Firebase保存に失敗しました。端末内の状態は残っています。", "Firebase save failed. Local state is still kept."));
+      saveFirebaseRoom(nextRoom).then(() => {
+        setSyncIssue("");
+      }).catch((error) => {
+        const message = getFirebaseIssueCopy(error, t);
+        setSyncIssue(message);
+        setToast(message);
       });
     }
   }
@@ -439,6 +497,11 @@ function App() {
     setSession((current) => ({ ...current, language: nextLanguage }));
   }
 
+  function handleStartingBalanceChange(value: number) {
+    const nextValue = Math.floor(Number.isFinite(value) ? value : room.startingBalance);
+    updateRoom((current) => ({ ...current, startingBalance: nextValue, updatedAt: Date.now() }));
+  }
+
   function handlePickContestant(contestantId: string) {
     const count = requiredPickCount(betType);
     setSelectedPickIds((current) => {
@@ -453,6 +516,12 @@ function App() {
       setSelectedContestantId(next[0] ?? contestantId);
       return next;
     });
+  }
+
+  function handlePickOrder(contestantIds: string[]) {
+    const next = contestantIds.slice(0, requiredPickCount(betType));
+    setSelectedPickIds(next);
+    setSelectedContestantId(next[0] ?? "");
   }
 
   function handleContestantStrengthChange(
@@ -497,15 +566,46 @@ function App() {
     }));
   }
 
-  function handleSettingChange(key: "maxPlayers" | "maxContestants" | "autoOdds", value: number | boolean) {
+  function handleSettingChange(
+    key: "maxPlayers" | "maxContestants" | "autoOdds" | "marketOdds" | "allowDebt" | "maxRaces" | "specialBonus",
+    value: number | boolean,
+  ) {
     updateRoom((current) => ({
       ...current,
       settings: {
         ...current.settings,
-        [key]: typeof value === "number" ? clampCount(value) : value,
+        [key]:
+          typeof value === "number"
+            ? key === "maxRaces"
+              ? clampRaceCount(value)
+              : key === "specialBonus"
+                ? Math.max(0, Math.floor(value))
+                : clampCount(value)
+            : value,
       },
       updatedAt: Date.now(),
     }));
+    if (key === "specialBonus" && typeof value === "number") {
+      setBonusAmount(Math.max(0, Math.floor(value)));
+    }
+  }
+
+  function handleGrantBonus() {
+    const amountToGrant = Math.floor(bonusAmount);
+    if (!bonusPlayerId || amountToGrant <= 0) {
+      showToast(t("ボーナス対象と金額を確認してください。", "Choose a bonus player and amount."));
+      return;
+    }
+
+    updateRoom((current) => ({
+      ...current,
+      players: current.players.map((player) =>
+        player.id === bonusPlayerId ? { ...player, balance: player.balance + amountToGrant } : player,
+      ),
+      settings: { ...current.settings, specialBonus: amountToGrant },
+      updatedAt: Date.now(),
+    }));
+    showToast(t("特別ボーナスを付与しました。", "Special bonus granted."));
   }
 
   function handleAutoOdds() {
@@ -536,6 +636,12 @@ function App() {
   }
 
   function handleNextRace() {
+    const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
+    if (currentRaceNumber >= room.settings.maxRaces) {
+      showToast(t("最終レースまで完了しました。ランキングで結果を確認してください。", "The final race is complete. Check the ranking."));
+      setTab("ranking");
+      return;
+    }
     const next = startNextRace(room);
     commitRoom(next);
     setResultIds([]);
@@ -607,6 +713,13 @@ function App() {
           </div>
         </section>
 
+        {syncIssue && !room.isDemo && (
+          <section className="sync-alert" role="status">
+            <Radio size={18} />
+            <p>{syncIssue}</p>
+          </section>
+        )}
+
         {session.role === "player" && !currentPlayer ? (
           <JoinPanel
             joinName={joinName}
@@ -624,7 +737,8 @@ function App() {
               <HomeView
                 room={room}
                 ranking={ranking}
-                timeLeft={timeLeft}
+                elapsedTime={elapsedTime}
+                currentRaceNumber={currentRaceNumber}
                 hasJackpot={hasJackpot}
                 publicUrl={publicUrl}
                 t={t}
@@ -654,6 +768,9 @@ function App() {
                 setAmount={setAmount}
                 selectedContestant={selectedContestant}
                 potentialPayout={potentialPayout}
+                displayMode={betDisplayMode}
+                setDisplayMode={setBetDisplayMode}
+                onPickOrder={handlePickOrder}
                 onPlaceBet={handlePlaceBet}
                 betTypeLabels={betTypeLabels}
                 t={t}
@@ -683,6 +800,10 @@ function App() {
                 setNewContestantIsCpu={setNewContestantIsCpu}
                 newContestantEmoji={newContestantEmoji}
                 setNewContestantEmoji={setNewContestantEmoji}
+                bonusPlayerId={bonusPlayerId}
+                setBonusPlayerId={setBonusPlayerId}
+                bonusAmount={bonusAmount}
+                setBonusAmount={setBonusAmount}
                 resultIds={resultIds}
                 themeCopy={themeCopy}
                 betTypeLabels={betTypeLabels}
@@ -692,18 +813,28 @@ function App() {
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
                 onRoomNameChange={handleRoomNameChange}
+                onStartingBalanceChange={handleStartingBalanceChange}
                 onPlayerSkillChange={handlePlayerSkillChange}
                 onPlayerEmojiChange={handlePlayerEmojiChange}
                 onContestantStrengthChange={handleContestantStrengthChange}
                 onSettingChange={handleSettingChange}
                 onAutoOdds={handleAutoOdds}
+                onGrantBonus={handleGrantBonus}
                 onResultPick={handleResultPick}
                 onSettle={handleSettle}
                 onNextRace={handleNextRace}
               />
             )}
 
-            {tab === "ranking" && <RankingView room={room} ranking={ranking} t={t} />}
+            {tab === "ranking" && (
+              <RankingView
+                room={room}
+                ranking={ranking}
+                displayMode={resultDisplayMode}
+                setDisplayMode={setResultDisplayMode}
+                t={t}
+              />
+            )}
           </>
         )}
 
@@ -769,7 +900,8 @@ function JoinPanel(props: {
 function HomeView(props: {
   room: Room;
   ranking: Player[];
-  timeLeft: string;
+  elapsedTime: string;
+  currentRaceNumber: number;
   hasJackpot: boolean;
   publicUrl: string;
   t: Translate;
@@ -787,7 +919,7 @@ function HomeView(props: {
       <section className="race-hero">
         <div>
           <p className="badge">{props.room.isDemo ? props.t("デモ表示", "Demo") : props.t("開催中", "Live")}</p>
-          <h2>{props.room.currentRace.title}</h2>
+          <h2>{props.t(`第${props.currentRaceNumber}レース`, `Race ${props.currentRaceNumber}`)}</h2>
           <p>
             {props.room.isDemo
               ? props.t("この名前と数値は操作確認用のサンプルです", "Names and numbers here are sample data")
@@ -796,7 +928,8 @@ function HomeView(props: {
         </div>
         <div className="timer">
           <Radio size={18} />
-          {props.timeLeft}
+          <span>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</span>
+          <small>{props.t(`経過 ${props.elapsedTime}`, `Elapsed ${props.elapsedTime}`)}</small>
         </div>
       </section>
 
@@ -915,11 +1048,15 @@ function BetView(props: {
   setAmount: (value: number) => void;
   selectedContestant?: ReturnType<typeof getContestant>;
   potentialPayout: number;
+  displayMode: BetDisplayMode;
+  setDisplayMode: (value: BetDisplayMode) => void;
+  onPickOrder: (contestantIds: string[]) => void;
   onPlaceBet: () => void;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
   t: Translate;
 }) {
   const available = props.activePlayer ? getAvailableBalance(props.room, props.activePlayer.id) : 0;
+  const shownBalance = props.room.settings.allowDebt ? props.activePlayer?.balance ?? 0 : available;
   const pickCount = requiredPickCount(props.betType);
   const selectedContestants = props.selectedPickIds
     .map((contestantId) => getContestant(props.room, contestantId))
@@ -953,30 +1090,9 @@ function BetView(props: {
           <strong>{props.activePlayer ? `${props.activePlayer.emoji} ${props.activePlayer.name}` : props.t("未選択", "Not selected")}</strong>
         </div>
         <div>
-          <span>{props.t("残コイン", "Available")}</span>
-          <strong>{currency.format(available)}</strong>
+          <span>{props.room.settings.allowDebt ? props.t("現在コイン", "Balance") : props.t("残コイン", "Available")}</span>
+          <strong>{currency.format(shownBalance)}</strong>
         </div>
-      </section>
-
-      <section className="contestant-list">
-        {props.room.contestants.map((contestant, index) => (
-          <button
-            className={props.selectedPickIds.includes(contestant.id) ? "contestant selected" : "contestant"}
-            key={contestant.id}
-            type="button"
-            onClick={() => props.onPickContestant(contestant.id)}
-          >
-            <span className="rank-chip">{index + 1}</span>
-            <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
-              {contestant.icon}
-            </span>
-            <span className="contestant-name">{contestant.name}</span>
-            <strong>{contestant.odds.toFixed(2)}x</strong>
-            <span className="select-circle">
-              {props.selectedPickIds.includes(contestant.id) ? `${props.selectedPickIds.indexOf(contestant.id) + 1}` : ""}
-            </span>
-          </button>
-        ))}
       </section>
 
       <section className="bet-type-grid">
@@ -993,6 +1109,55 @@ function BetView(props: {
           </button>
         ))}
       </section>
+
+      <section className="view-toggle" aria-label={props.t("表示切り替え", "View mode")}>
+        <button
+          className={props.displayMode === "board" ? "selected" : ""}
+          type="button"
+          onClick={() => props.setDisplayMode("board")}
+        >
+          {props.t("馬券表", "Ticket board")}
+        </button>
+        <button
+          className={props.displayMode === "cards" ? "selected" : ""}
+          type="button"
+          onClick={() => props.setDisplayMode("cards")}
+        >
+          {props.t("カード", "Cards")}
+        </button>
+      </section>
+
+      {props.displayMode === "board" ? (
+        <TicketBoard
+          room={props.room}
+          betType={props.betType}
+          selectedPickIds={props.selectedPickIds}
+          onPickContestant={props.onPickContestant}
+          onPickOrder={props.onPickOrder}
+          t={props.t}
+        />
+      ) : (
+        <section className="contestant-list">
+          {props.room.contestants.map((contestant, index) => (
+            <button
+              className={props.selectedPickIds.includes(contestant.id) ? "contestant selected" : "contestant"}
+              key={contestant.id}
+              type="button"
+              onClick={() => props.onPickContestant(contestant.id)}
+            >
+              <span className="rank-chip">{index + 1}</span>
+              <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
+                {contestant.icon}
+              </span>
+              <span className="contestant-name">{contestant.name}</span>
+              <strong>{contestant.odds.toFixed(2)}x</strong>
+              <span className="select-circle">
+                {props.selectedPickIds.includes(contestant.id) ? `${props.selectedPickIds.indexOf(contestant.id) + 1}` : ""}
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
 
       {pickCount > 1 && (
         <section className="order-ticket">
@@ -1013,7 +1178,7 @@ function BetView(props: {
           <span>{props.t("ベット額", "Bet amount")}</span>
           <strong>
             {selectedContestants.length === pickCount
-              ? `${placeMultiplier(props.betType, selectedContestants).toFixed(2)}x`
+              ? `${getEffectiveMultiplier(props.room, props.betType, selectedContestants).toFixed(2)}x`
               : "-"}
           </strong>
         </div>
@@ -1035,8 +1200,8 @@ function BetView(props: {
               {quickAmount}
             </button>
           ))}
-          <button type="button" onClick={() => props.setAmount(available)}>
-            {props.t("全額", "All")}
+          <button type="button" onClick={() => props.setAmount(Math.max(0, shownBalance))}>
+            {props.t("所持分", "Balance")}
           </button>
         </div>
       </section>
@@ -1054,6 +1219,114 @@ function BetView(props: {
         <ChevronRight size={22} />
       </button>
     </div>
+  );
+}
+
+function TicketBoard(props: {
+  room: Room;
+  betType: BetType;
+  selectedPickIds: string[];
+  onPickContestant: (contestantId: string) => void;
+  onPickOrder: (contestantIds: string[]) => void;
+  t: Translate;
+}) {
+  const contestants = props.room.contestants;
+  const pairPickIds = props.selectedPickIds.slice(0, 2);
+  const thirdPickId = props.selectedPickIds[2];
+
+  if (props.betType === "win" || props.betType === "place") {
+    return (
+      <section className="ticket-board single">
+        <div className="ticket-board-head">
+          <span>{props.t("番号", "No.")}</span>
+          <span>{props.t("出走者", "Contestant")}</span>
+          <span>{props.t("倍率", "Odds")}</span>
+        </div>
+        {contestants.map((contestant, index) => (
+          <button
+            className={props.selectedPickIds[0] === contestant.id ? "ticket-row selected" : "ticket-row"}
+            key={contestant.id}
+            type="button"
+            onClick={() => props.onPickContestant(contestant.id)}
+          >
+            <span className="horse-number" style={{ "--accent": contestant.accent } as CSSProperties}>
+              {index + 1}
+            </span>
+            <strong>{contestant.icon} {contestant.name}</strong>
+            <span>{getEffectiveMultiplier(props.room, props.betType, [contestant]).toFixed(2)}x</span>
+          </button>
+        ))}
+      </section>
+    );
+  }
+
+  return (
+    <section className="ticket-board matrix">
+      <div className="matrix-scroll" style={{ "--matrix-count": contestants.length } as CSSProperties}>
+        <div className="matrix-corner">{props.t("1着", "1st")}</div>
+        {contestants.map((contestant, index) => (
+          <div className="matrix-head" key={contestant.id} style={{ "--accent": contestant.accent } as CSSProperties}>
+            {index + 1}
+          </div>
+        ))}
+        {contestants.map((row, rowIndex) => (
+          <div className="matrix-row-fragment" key={row.id}>
+            <div className="matrix-side" style={{ "--accent": row.accent } as CSSProperties}>
+              <span>{rowIndex + 1}</span>
+              <strong>{row.name}</strong>
+            </div>
+            {contestants.map((column, columnIndex) => {
+              const disabled = row.id === column.id;
+              const selected = pairPickIds[0] === row.id && pairPickIds[1] === column.id;
+              const pairMultiplier = getEffectiveMultiplier(props.room, "exacta", [row, column]);
+              return (
+                <button
+                  className={selected ? "matrix-cell selected" : "matrix-cell"}
+                  disabled={disabled}
+                  key={`${row.id}-${column.id}`}
+                  type="button"
+                  onClick={() => {
+                    const third = thirdPickId && thirdPickId !== row.id && thirdPickId !== column.id ? thirdPickId : "";
+                    props.onPickOrder(props.betType === "trifecta" ? [row.id, column.id, third].filter(Boolean) : [row.id, column.id]);
+                  }}
+                >
+                  {disabled ? "" : (
+                    <>
+                      <span>{rowIndex + 1}-{columnIndex + 1}</span>
+                      <strong>{pairMultiplier.toFixed(1)}x</strong>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      {props.betType === "trifecta" && (
+        <div className="third-pick-strip">
+          <span>{props.t("3着", "3rd")}</span>
+          {contestants.map((contestant, index) => {
+            const disabled = pairPickIds.includes(contestant.id) || pairPickIds.length < 2;
+            return (
+              <button
+                className={thirdPickId === contestant.id ? "selected" : ""}
+                disabled={disabled}
+                key={contestant.id}
+                type="button"
+                onClick={() => props.onPickOrder([pairPickIds[0], pairPickIds[1], contestant.id].filter(Boolean))}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="board-note">
+        {props.betType === "trifecta"
+          ? props.t("表で1着-2着を選び、下で3着を選びます。", "Pick 1st-2nd in the board, then 3rd below.")
+          : props.t("表のマスで1着-2着の順番を選びます。", "Tap a cell to pick 1st-2nd in order.")}
+      </p>
+    </section>
   );
 }
 
@@ -1079,6 +1352,10 @@ function HostView(props: {
   setNewContestantIsCpu: (value: boolean) => void;
   newContestantEmoji: string;
   setNewContestantEmoji: (value: string) => void;
+  bonusPlayerId: string;
+  setBonusPlayerId: (value: string) => void;
+  bonusAmount: number;
+  setBonusAmount: (value: number) => void;
   resultIds: string[];
   themeCopy: Record<ThemeName, { label: string; note: string }>;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
@@ -1088,14 +1365,19 @@ function HostView(props: {
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
   onRoomNameChange: (name: string) => void;
+  onStartingBalanceChange: (value: number) => void;
   onPlayerSkillChange: (playerId: string, skillRating: number) => void;
   onPlayerEmojiChange: (playerId: string, emoji: string) => void;
   onContestantStrengthChange: (
     contestantId: string,
     patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean; icon: string }>,
   ) => void;
-  onSettingChange: (key: "maxPlayers" | "maxContestants" | "autoOdds", value: number | boolean) => void;
+  onSettingChange: (
+    key: "maxPlayers" | "maxContestants" | "autoOdds" | "marketOdds" | "allowDebt" | "maxRaces" | "specialBonus",
+    value: number | boolean,
+  ) => void;
   onAutoOdds: () => void;
+  onGrantBonus: () => void;
   onResultPick: (contestantId: string) => void;
   onSettle: () => void;
   onNextRace: () => void;
@@ -1148,6 +1430,25 @@ function HostView(props: {
               onChange={(event) => props.onSettingChange("maxContestants", Number(event.target.value))}
             />
           </label>
+          <label>
+            {props.t("初期コイン", "Starting coins")}
+            <input
+              type="number"
+              step="10"
+              value={props.room.startingBalance}
+              onChange={(event) => props.onStartingBalanceChange(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            {props.t("最終レース", "Final race")}
+            <input
+              type="number"
+              min="1"
+              max="15"
+              value={props.room.settings.maxRaces}
+              onChange={(event) => props.onSettingChange("maxRaces", Number(event.target.value))}
+            />
+          </label>
           <label className="toggle-label wide">
             <input
               type="checkbox"
@@ -1156,11 +1457,33 @@ function HostView(props: {
             />
             {props.t("自動オッズ", "Auto odds")}
           </label>
+          <label className="toggle-label wide">
+            <input
+              type="checkbox"
+              checked={props.room.settings.marketOdds}
+              onChange={(event) => props.onSettingChange("marketOdds", event.target.checked)}
+            />
+            {props.t("BET量で倍率を変動", "Move odds by bet pool")}
+          </label>
+          <label className="toggle-label wide">
+            <input
+              type="checkbox"
+              checked={props.room.settings.allowDebt}
+              onChange={(event) => props.onSettingChange("allowDebt", event.target.checked)}
+            />
+            {props.t("マイナス残高でもBETを続ける", "Allow debt betting")}
+          </label>
         </div>
         <button className="secondary-button full" type="button" onClick={props.onAutoOdds}>
           <Sparkles size={18} />
           {props.t("強さ/CPU Lvから倍率更新", "Update odds from strength / CPU Lv")}
         </button>
+        <p className="host-note">
+          {props.t(
+            "自動オッズは強さから初期勝率を作り、BET量変動をONにすると人気の馬券ほど倍率が下がります。",
+            "Auto odds estimate base win rates from power. Pool odds lower the multiplier for popular tickets.",
+          )}
+        </p>
       </section>
 
       <section className="host-panel">
@@ -1219,6 +1542,33 @@ function HostView(props: {
               />
             </div>
           ))}
+        </div>
+        <div className="bonus-panel">
+          <div>
+            <strong>{props.t("特別ボーナス", "Special bonus")}</strong>
+            <span>{props.t("1位ボーナスや借金返済などを幹事が手動で反映できます。", "Host can grant winner bonuses or debt relief manually.")}</span>
+          </div>
+          <select value={props.bonusPlayerId} onChange={(event) => props.setBonusPlayerId(event.target.value)}>
+            {props.room.players.map((player) => (
+              <option key={player.id} value={player.id}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            step="10"
+            value={props.bonusAmount}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              props.setBonusAmount(Number.isFinite(next) ? next : 0);
+              props.onSettingChange("specialBonus", Number.isFinite(next) ? next : 0);
+            }}
+          />
+          <button className="secondary-button" type="button" onClick={props.onGrantBonus}>
+            <Plus size={18} />
+            {props.t("付与", "Grant")}
+          </button>
         </div>
       </section>
 
@@ -1387,23 +1737,124 @@ function HostView(props: {
   );
 }
 
-function RankingView(props: { room: Room; ranking: Player[]; t: Translate }) {
+function RankingView(props: {
+  room: Room;
+  ranking: Player[];
+  displayMode: ResultDisplayMode;
+  setDisplayMode: (value: ResultDisplayMode) => void;
+  t: Translate;
+}) {
+  const latestHistory = props.room.raceHistory.at(-1);
+
   return (
     <div className="screen-stack">
-      <section className="leader-preview full">
-        <div className="section-heading">
-          <Crown size={20} />
-          <div>
-            <h2>{props.t("リアルタイムランキング", "Live Ranking")}</h2>
-            <p>{props.t("コインが0になった人も表示します", "Players at 0 coins stay visible")}</p>
-          </div>
+      <section className="result-mode-panel">
+        <div className="view-toggle" aria-label={props.t("結果表示切り替え", "Result view")}>
+          <button
+            className={props.displayMode === "ranking" ? "selected" : ""}
+            type="button"
+            onClick={() => props.setDisplayMode("ranking")}
+          >
+            {props.t("ランキング", "Ranking")}
+          </button>
+          <button
+            className={props.displayMode === "payouts" ? "selected" : ""}
+            type="button"
+            onClick={() => props.setDisplayMode("payouts")}
+          >
+            {props.t("払戻表", "Payouts")}
+          </button>
         </div>
-        {props.ranking.map((player, index) => (
-          <PlayerRankRow key={player.id} player={player} rank={index + 1} t={props.t} />
-        ))}
       </section>
 
-      {props.room.currentRace.status === "settled" && (
+      {props.displayMode === "ranking" && (
+        <section className="leader-preview full">
+          <div className="section-heading">
+            <Crown size={20} />
+            <div>
+              <h2>{props.t("リアルタイムランキング", "Live Ranking")}</h2>
+              <p>{props.t("マイナス残高の人も最後まで表示します", "Negative balances stay visible until the end")}</p>
+            </div>
+          </div>
+          <div className="podium-grid">
+            {props.ranking.slice(0, 3).map((player, index) => (
+              <div className={`podium-card rank-${index + 1}`} key={player.id}>
+                <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
+                  {player.emoji}
+                </span>
+                <strong>{player.name}</strong>
+                <span>{props.t(`${index + 1}位`, `#${index + 1}`)}</span>
+                <b>{currency.format(player.balance)}</b>
+              </div>
+            ))}
+          </div>
+          {props.ranking.map((player, index) => (
+            <PlayerRankRow key={player.id} player={player} rank={index + 1} t={props.t} />
+          ))}
+        </section>
+      )}
+
+      {props.displayMode === "payouts" && (
+        <section className="result-summary full">
+          <div className="section-heading">
+            <Medal size={20} />
+            <div>
+              <h2>{props.t("払戻表", "Payout Table")}</h2>
+              <p>{latestHistory?.raceTitle ?? props.t("まだ確定したレースはありません", "No settled race yet")}</p>
+            </div>
+          </div>
+          {latestHistory ? (
+            <>
+              <div className="result-order-strip">
+                {latestHistory.resultIds.map((id, index) => {
+                  const contestant = getContestant(props.room, id);
+                  return (
+                    <span key={id}>
+                      <b>{index + 1}</b>
+                      {contestant ? `${contestant.icon} ${contestant.name}` : "Unknown"}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="payout-table">
+                {latestHistory.payouts.map((payout) => {
+                  const player = props.room.players.find((item) => item.id === payout.playerId);
+                  return (
+                    <div className={payout.delta >= 0 ? "payout-row plus" : "payout-row minus"} key={payout.playerId}>
+                      <span>{player ? `${player.emoji} ${player.name}` : "Unknown"}</span>
+                      <span>{props.t("賭け", "Stake")} {currency.format(payout.stake)}</span>
+                      <strong>{props.t("払戻", "Back")} {currency.format(payout.payout)}</strong>
+                      <b>{payout.delta >= 0 ? "+" : ""}{currency.format(payout.delta)}</b>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="race-ledger">
+                <div className="race-ledger-head">
+                  <span>{props.t("レース", "Race")}</span>
+                  <span>{props.t("主な変動", "Top change")}</span>
+                </div>
+                {props.room.raceHistory.map((entry, index) => {
+                  const topDelta = [...entry.payouts].sort((a, b) => b.delta - a.delta)[0];
+                  const player = props.room.players.find((item) => item.id === topDelta?.playerId);
+                  return (
+                    <div className="race-ledger-row" key={entry.raceId}>
+                      <span>{index + 1}</span>
+                      <strong>
+                        {player?.name ?? "-"} {topDelta ? `${topDelta.delta >= 0 ? "+" : ""}${currency.format(topDelta.delta)}` : ""}
+                      </strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="muted">{props.t("結果確定後に払戻とレース別の記録が表示されます。", "Payouts and race history appear after settling results.")}</p>
+          )}
+        </section>
+      )}
+
+      {props.displayMode === "ranking" && props.room.currentRace.status === "settled" && (
         <section className="result-summary">
           <div className="section-heading">
               <Medal size={20} />

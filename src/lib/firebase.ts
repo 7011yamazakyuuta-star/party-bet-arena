@@ -13,6 +13,27 @@ const firebaseConfig = {
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 
+export type FirebaseIssueKind =
+  | "anonymous-auth"
+  | "permission"
+  | "database-url"
+  | "network"
+  | "unknown";
+
+export function getFirebaseIssueKind(error: unknown): FirebaseIssueKind {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const detail = `${code} ${message}`.toLowerCase();
+
+  if (detail.includes("auth/operation-not-allowed") || detail.includes("anonymous")) return "anonymous-auth";
+  if (detail.includes("permission_denied") || detail.includes("permission-denied")) return "permission";
+  if (detail.includes("database_url") || detail.includes("databaseurl") || detail.includes("invalid-url")) {
+    return "database-url";
+  }
+  if (detail.includes("network") || detail.includes("failed to fetch") || detail.includes("offline")) return "network";
+  return "unknown";
+}
+
 async function getFirebaseServices() {
   if (!isFirebaseConfigured) return null;
 
