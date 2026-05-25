@@ -572,9 +572,13 @@ function App() {
           : contestant,
       );
 
+      const shouldRecalculateOdds =
+        "strengthRating" in patch || "cpuLevel" in patch || "isCpu" in patch;
+
       return {
         ...current,
-        contestants: current.settings.autoOdds ? calculateAutoOdds(contestants) : contestants,
+        settings: shouldRecalculateOdds ? { ...current.settings, autoOdds: true } : current.settings,
+        contestants: shouldRecalculateOdds || current.settings.autoOdds ? calculateAutoOdds(contestants) : contestants,
         updatedAt: Date.now(),
       };
     });
@@ -1915,14 +1919,14 @@ function RankingView(props: {
               <p>{props.t("マイナス残高の人も最後まで表示します", "Negative balances stay visible until the end")}</p>
             </div>
           </div>
-          <div className="podium-grid">
+              <div className="podium-grid">
             {props.ranking.slice(0, 3).map((player, index) => (
               <div className={`podium-card rank-${index + 1}`} key={player.id}>
+                <span className="podium-rank">{index + 1}</span>
                 <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
                   {player.emoji}
                 </span>
                 <strong>{player.name}</strong>
-                <span>{props.t(`${index + 1}位`, `#${index + 1}`)}</span>
                 <b>{currency.format(player.balance)}</b>
               </div>
             ))}
@@ -1956,13 +1960,19 @@ function RankingView(props: {
                 })}
               </div>
               <div className="payout-table">
+                <div className="payout-head">
+                  <span>{props.t("参加者", "Bettor")}</span>
+                  <span>{props.t("賭け", "Stake")}</span>
+                  <span>{props.t("払戻", "Payout")}</span>
+                  <span>±</span>
+                </div>
                 {latestHistory.payouts.map((payout) => {
                   const player = props.room.players.find((item) => item.id === payout.playerId);
                   return (
                     <div className={payout.delta >= 0 ? "payout-row plus" : "payout-row minus"} key={payout.playerId}>
-                      <span>{player ? `${player.emoji} ${player.name}` : "Unknown"}</span>
-                      <span>{props.t("賭け", "Stake")} {currency.format(payout.stake)}</span>
-                      <strong>{props.t("払戻", "Back")} {currency.format(payout.payout)}</strong>
+                      <span className="payout-player">{player ? `${player.emoji} ${player.name}` : "Unknown"}</span>
+                      <span>{currency.format(payout.stake)}</span>
+                      <strong>{currency.format(payout.payout)}</strong>
                       <b>{payout.delta >= 0 ? "+" : ""}{currency.format(payout.delta)}</b>
                     </div>
                   );
