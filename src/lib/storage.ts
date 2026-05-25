@@ -3,11 +3,23 @@ import type { AppRole, LanguageName, Player, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
+const roomSummariesKey = "party-bet-arena:room-summaries";
 
 export type LocalSession = {
   role: AppRole;
   playerId?: string;
   language: LanguageName;
+};
+
+export type LocalRoomSummary = {
+  id: string;
+  name: string;
+  joinCode: string;
+  isDemo: boolean;
+  currentRaceNumber: number;
+  maxRaces: number;
+  status: Room["currentRace"]["status"];
+  updatedAt: number;
 };
 
 const validThemes = new Set<ThemeName>(["party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
@@ -19,6 +31,7 @@ const legacyContestantIcons: Record<string, string> = {
   bolt: "⚡",
   leaf: "🍀",
 };
+const validLanguages = new Set<LanguageName>(["ja", "en", "zh", "ko", "es", "fr", "de", "it", "uk"]);
 
 function normalizeIcon(icon: string | undefined, index: number) {
   if (!icon) return fallbackContestantIcons[index % fallbackContestantIcons.length];
@@ -37,7 +50,49 @@ export function loadRoom() {
 }
 
 export function saveRoom(room: Room) {
-  localStorage.setItem(roomKey, JSON.stringify({ ...normalizeRoom(room), updatedAt: Date.now() }));
+  const normalized = normalizeRoom(room);
+  const next = { ...normalized, updatedAt: Date.now() };
+  localStorage.setItem(roomKey, JSON.stringify(next));
+  return rememberRoom(next);
+}
+
+export function loadRoomSummaries(): LocalRoomSummary[] {
+  const stored = localStorage.getItem(roomSummariesKey);
+  if (!stored) return [];
+
+  try {
+    const parsed = JSON.parse(stored) as Partial<LocalRoomSummary>[];
+    return parsed
+      .filter((room): room is LocalRoomSummary => Boolean(room.id && room.name && room.joinCode))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch {
+    return [];
+  }
+}
+
+export function rememberRoom(room: Room) {
+  if (room.isDemo) return loadRoomSummaries();
+
+  const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
+  const summary: LocalRoomSummary = {
+    id: room.id,
+    name: room.name.trim() || room.id,
+    joinCode: room.joinCode,
+    isDemo: room.isDemo,
+    currentRaceNumber,
+    maxRaces: room.settings.maxRaces,
+    status: room.currentRace.status,
+    updatedAt: room.updatedAt,
+  };
+  const next = [summary, ...loadRoomSummaries().filter((item) => item.id !== room.id)].slice(0, 12);
+  localStorage.setItem(roomSummariesKey, JSON.stringify(next));
+  return next;
+}
+
+export function forgetRoomSummary(roomId: string) {
+  const next = loadRoomSummaries().filter((item) => item.id !== roomId);
+  localStorage.setItem(roomSummariesKey, JSON.stringify(next));
+  return next;
 }
 
 export function loadSession(): LocalSession {
@@ -49,7 +104,7 @@ export function loadSession(): LocalSession {
     return {
       role: session.role === "player" ? "player" : "host",
       playerId: session.playerId,
-      language: session.language === "en" ? "en" : "ja",
+      language: validLanguages.has(session.language as LanguageName) ? (session.language as LanguageName) : "ja",
     };
   } catch {
     return { role: "host", language: "ja" };

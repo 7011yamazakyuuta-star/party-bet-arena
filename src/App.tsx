@@ -44,13 +44,23 @@ import {
 } from "./lib/calculations";
 import { createBlankRoom } from "./lib/sample";
 import {
+  deleteFirebaseRoom,
   fetchFirebaseRoom,
   getFirebaseIssueKind,
   isFirebaseConfigured,
   saveFirebaseRoom,
   subscribeFirebaseRoom,
 } from "./lib/firebase";
-import { loadRoom, loadSession, resetLocalRoom, saveRoom, saveSession } from "./lib/storage";
+import {
+  forgetRoomSummary,
+  loadRoom,
+  loadRoomSummaries,
+  loadSession,
+  resetLocalRoom,
+  saveRoom,
+  saveSession,
+} from "./lib/storage";
+import type { LocalRoomSummary } from "./lib/storage";
 import type { BetType, DraftBet, LanguageName, Player, Room, ThemeName } from "./lib/types";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
@@ -108,7 +118,132 @@ function getBetTypeCopy(t: Translate): Record<BetType, { title: string; note: st
   };
 }
 
-const quickAmounts = [10, 50, 100, 250, 500];
+const quickAmounts = [10, 50, 100, 500, 1000, 5000];
+const languageOptions: Array<{ value: LanguageName; label: string; short: string }> = [
+  { value: "ja", label: "日本語", short: "JP" },
+  { value: "en", label: "English", short: "EN" },
+  { value: "zh", label: "中文", short: "ZH" },
+  { value: "ko", label: "한국어", short: "KO" },
+  { value: "es", label: "Español", short: "ES" },
+  { value: "fr", label: "Français", short: "FR" },
+  { value: "de", label: "Deutsch", short: "DE" },
+  { value: "it", label: "Italiano", short: "IT" },
+  { value: "uk", label: "Українська", short: "UA" },
+];
+
+const languageDictionary: Partial<Record<LanguageName, Record<string, string>>> = {
+  zh: {
+    Home: "首页",
+    Bet: "下注",
+    Host: "主持",
+    Ranks: "排名",
+    Room: "房间",
+    Code: "代码",
+    Mode: "模式",
+    Available: "可用",
+    Ranking: "排名",
+    Payouts: "派彩",
+    "Room list": "房间列表",
+    Open: "打开",
+    Delete: "删除",
+  },
+  ko: {
+    Home: "홈",
+    Bet: "베팅",
+    Host: "진행",
+    Ranks: "순위",
+    Room: "방",
+    Code: "코드",
+    Mode: "모드",
+    Available: "사용 가능",
+    Ranking: "순위",
+    Payouts: "정산",
+    "Room list": "방 목록",
+    Open: "열기",
+    Delete: "삭제",
+  },
+  es: {
+    Home: "Inicio",
+    Bet: "Apostar",
+    Host: "Anfitrión",
+    Ranks: "Rangos",
+    Room: "Sala",
+    Code: "Código",
+    Mode: "Modo",
+    Available: "Disponible",
+    Ranking: "Clasificación",
+    Payouts: "Pagos",
+    "Room list": "Salas",
+    Open: "Abrir",
+    Delete: "Eliminar",
+  },
+  fr: {
+    Home: "Accueil",
+    Bet: "Miser",
+    Host: "Hôte",
+    Ranks: "Classement",
+    Room: "Salon",
+    Code: "Code",
+    Mode: "Mode",
+    Available: "Disponible",
+    Ranking: "Classement",
+    Payouts: "Gains",
+    "Room list": "Salons",
+    Open: "Ouvrir",
+    Delete: "Supprimer",
+  },
+  de: {
+    Home: "Start",
+    Bet: "Wette",
+    Host: "Host",
+    Ranks: "Rang",
+    Room: "Raum",
+    Code: "Code",
+    Mode: "Modus",
+    Available: "Verfügbar",
+    Ranking: "Rangliste",
+    Payouts: "Auszahlung",
+    "Room list": "Räume",
+    Open: "Öffnen",
+    Delete: "Löschen",
+  },
+  it: {
+    Home: "Home",
+    Bet: "Punta",
+    Host: "Host",
+    Ranks: "Classifica",
+    Room: "Stanza",
+    Code: "Codice",
+    Mode: "Modalità",
+    Available: "Disponibile",
+    Ranking: "Classifica",
+    Payouts: "Vincite",
+    "Room list": "Stanze",
+    Open: "Apri",
+    Delete: "Elimina",
+  },
+  uk: {
+    Home: "Головна",
+    Bet: "Ставка",
+    Host: "Ведучий",
+    Ranks: "Рейтинг",
+    Room: "Кімната",
+    Code: "Код",
+    Mode: "Режим",
+    Available: "Доступно",
+    Ranking: "Рейтинг",
+    Payouts: "Виплати",
+    "Room list": "Кімнати",
+    Open: "Відкрити",
+    Delete: "Видалити",
+  },
+};
+
+function translateText(language: LanguageName, ja: string, en: string) {
+  if (language === "ja") return ja;
+  if (language === "en") return en;
+  return languageDictionary[language]?.[en] ?? en;
+}
 
 function formatTime(milliseconds: number) {
   const total = Math.max(0, Math.floor(milliseconds / 1000));
@@ -167,6 +302,7 @@ function getFirebaseIssueCopy(error: unknown, t: Translate) {
 
 function App() {
   const [room, setRoom] = useState(loadRoom);
+  const [roomSummaries, setRoomSummaries] = useState(loadRoomSummaries);
   const [session, setSession] = useState(loadSession);
   const [tab, setTab] = useState<TabKey>("home");
   const [selectedContestantId, setSelectedContestantId] = useState(room.contestants[0]?.id ?? "");
@@ -195,7 +331,7 @@ function App() {
   const [syncIssue, setSyncIssue] = useState("");
   const [tick, setTick] = useState(Date.now());
   const language = session.language ?? "ja";
-  const t: Translate = (ja, en) => (language === "ja" ? ja : en);
+  const t: Translate = (ja, en) => translateText(language, ja, en);
   const betTypeLabels = useMemo(() => getBetTypeCopy(t), [language]);
   const themeCopy = useMemo(() => getThemeCopy(t), [language]);
 
@@ -204,7 +340,7 @@ function App() {
   }, [room.theme]);
 
   useEffect(() => {
-    document.documentElement.lang = language === "ja" ? "ja" : "en";
+    document.documentElement.lang = language;
   }, [language]);
 
   useEffect(() => {
@@ -244,7 +380,7 @@ function App() {
     let unsubscribe: undefined | (() => void);
     subscribeFirebaseRoom(room.id, (remoteRoom) => {
       setRoom(remoteRoom);
-      saveRoom(remoteRoom);
+      setRoomSummaries(saveRoom(remoteRoom));
     }).then((cleanup) => {
       unsubscribe = cleanup;
     });
@@ -279,7 +415,7 @@ function App() {
 
   function commitRoom(nextRoom: Room, sync = true) {
     setRoom(nextRoom);
-    saveRoom(nextRoom);
+    setRoomSummaries(saveRoom(nextRoom));
     if (sync && isFirebaseConfigured && !nextRoom.isDemo) {
       saveFirebaseRoom(nextRoom).then(() => {
         setSyncIssue("");
@@ -365,6 +501,83 @@ function App() {
     setSession((current) => ({ ...current, role: "player", playerId: player.id }));
     setTab("bet");
     showToast(t(`${name}で参加しました。`, `Joined as ${name}.`));
+  }
+
+  async function handleOpenRoom(roomId: string) {
+    if (room.id === roomId) {
+      showToast(t("このルームを表示中です。", "This room is already open."));
+      return;
+    }
+    if (!isFirebaseConfigured) {
+      showToast(t("過去ルームを開くにはFirebase設定が必要です。", "Firebase setup is required to reopen past rooms."));
+      return;
+    }
+
+    try {
+      const remoteRoom = await fetchFirebaseRoom(roomId);
+      if (!remoteRoom) {
+        showToast(t("ルームが見つかりません。削除済みか、Firebase設定を確認してください。", "Room not found. It may be deleted or Firebase may need setup."));
+        return;
+      }
+      commitRoom(remoteRoom);
+      setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+      setProxyPlayerId(remoteRoom.players[0]?.id ?? "");
+      setBonusPlayerId(remoteRoom.players[0]?.id ?? "");
+      setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
+      setSelectedPickIds(remoteRoom.contestants[0]?.id ? [remoteRoom.contestants[0].id] : []);
+      setResultIds(remoteRoom.currentRace.resultIds ?? []);
+      setTab("home");
+      showToast(t("ルームを開きました。", "Room opened."));
+    } catch (error) {
+      const message = getFirebaseIssueCopy(error, t);
+      setSyncIssue(message);
+      showToast(message);
+    }
+  }
+
+  async function handleDeleteRoom(roomId: string) {
+    const target = roomSummaries.find((item) => item.id === roomId);
+    const confirmed = window.confirm(
+      isFirebaseConfigured
+        ? t(
+          `${target?.name ?? roomId}を一覧から削除しますか？Firebase上のルーム削除も試します。`,
+          `Delete ${target?.name ?? roomId} from the list and try to delete it from Firebase?`,
+        )
+        : t(
+          `${target?.name ?? roomId}をこの端末の一覧から削除しますか？`,
+          `Delete ${target?.name ?? roomId} from this device's list?`,
+        ),
+    );
+    if (!confirmed) return;
+
+    let remoteDeleteFailed = false;
+    if (isFirebaseConfigured) {
+      try {
+        await deleteFirebaseRoom(roomId);
+      } catch (error) {
+        remoteDeleteFailed = true;
+        setSyncIssue(getFirebaseIssueCopy(error, t));
+      }
+    }
+
+    setRoomSummaries(forgetRoomSummary(roomId));
+    if (room.id === roomId) {
+      const next = resetLocalRoom();
+      setRoom(next);
+      setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+      setProxyPlayerId(next.players[0]?.id ?? "");
+      setBonusPlayerId(next.players[0]?.id ?? "");
+      setSelectedContestantId(next.contestants[0]?.id ?? "");
+      setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
+      setResultIds(next.currentRace.resultIds);
+      setTab("home");
+    }
+
+    showToast(
+      remoteDeleteFailed
+        ? t("この端末の一覧から削除しました。Firebase側はルールを確認してください。", "Removed from this device. Check Firebase rules for remote deletion.")
+        : t("ルームを削除しました。", "Room deleted."),
+    );
   }
 
   function handleRoomNameChange(name: string) {
@@ -708,14 +921,18 @@ function App() {
               <Crown size={18} />
               {t("幹事", "Host")}
             </button>
-            <button
-              className="pill-button language-button"
-              type="button"
-              onClick={() => handleLanguageChange(language === "ja" ? "en" : "ja")}
-              aria-label={t("言語を切り替え", "Switch language")}
+            <select
+              className="language-select"
+              value={language}
+              onChange={(event) => handleLanguageChange(event.target.value as LanguageName)}
+              aria-label={t("言語を選択", "Choose language")}
             >
-              {language === "ja" ? "JP" : "EN"}
-            </button>
+              {languageOptions.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.short} {option.label}
+                </option>
+              ))}
+            </select>
             <button
               className="icon-button"
               type="button"
@@ -772,6 +989,7 @@ function App() {
                 currentRaceNumber={currentRaceNumber}
                 hasJackpot={hasJackpot}
                 publicUrl={publicUrl}
+                roomSummaries={roomSummaries}
                 t={t}
                 onCreateRoom={handleCreateRoom}
                 onBetTab={() => setTab("bet")}
@@ -779,6 +997,8 @@ function App() {
                 onJoinMode={handleJoinMode}
                 onResetDemo={handleResetDemo}
                 onCopyInvite={handleCopyInvite}
+                onOpenRoom={handleOpenRoom}
+                onDeleteRoom={handleDeleteRoom}
               />
             )}
 
@@ -937,6 +1157,7 @@ function HomeView(props: {
   currentRaceNumber: number;
   hasJackpot: boolean;
   publicUrl: string;
+  roomSummaries: LocalRoomSummary[];
   t: Translate;
   onCreateRoom: () => void;
   onBetTab: () => void;
@@ -944,6 +1165,8 @@ function HomeView(props: {
   onJoinMode: () => void;
   onResetDemo: () => void;
   onCopyInvite: () => void;
+  onOpenRoom: (roomId: string) => void;
+  onDeleteRoom: (roomId: string) => void;
 }) {
   const betCount = props.room.currentRace.bets.length;
 
@@ -1019,6 +1242,44 @@ function HomeView(props: {
           <button className="secondary-button full" type="button" onClick={props.onCopyInvite}>
             {props.t("招待をコピー", "Copy invite")}
           </button>
+        </section>
+      )}
+
+      {props.roomSummaries.length > 0 && (
+        <section className="room-list-card">
+          <div className="section-heading">
+            <Home size={20} />
+            <div>
+              <h2>{props.t("ルーム一覧", "Room list")}</h2>
+              <p>{props.t("終わったルームはここから片付けられます。", "Clean up finished rooms here.")}</p>
+            </div>
+          </div>
+          <div className="room-list">
+            {props.roomSummaries.map((summary) => {
+              const isCurrent = summary.id === props.room.id;
+              const isComplete = summary.currentRaceNumber >= summary.maxRaces && summary.status === "settled";
+              return (
+                <div className={isCurrent ? "room-list-row current" : "room-list-row"} key={summary.id}>
+                  <div>
+                    <strong>{summary.name}</strong>
+                    <span>
+                      {summary.id} / {props.t(`第${summary.currentRaceNumber}/${summary.maxRaces}レース`, `Race ${summary.currentRaceNumber}/${summary.maxRaces}`)}
+                    </span>
+                  </div>
+                  <em className={isComplete ? "complete" : ""}>
+                    {isComplete ? props.t("完了", "Done") : props.t("進行中", "Active")}
+                  </em>
+                  <button type="button" onClick={() => props.onOpenRoom(summary.id)} disabled={isCurrent}>
+                    {isCurrent ? props.t("表示中", "Showing") : props.t("開く", "Open")}
+                  </button>
+                  <button className="delete-room-button" type="button" onClick={() => props.onDeleteRoom(summary.id)}>
+                    <Trash2 size={15} />
+                    {props.t("削除", "Delete")}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -1258,8 +1519,8 @@ function BetView(props: {
         </div>
         <div className="quick-grid">
           {quickAmounts.map((quickAmount) => (
-            <button key={quickAmount} type="button" onClick={() => props.setAmount(quickAmount)}>
-              {quickAmount}
+            <button key={quickAmount} type="button" onClick={() => props.setAmount(props.amount + quickAmount)}>
+              +{currency.format(quickAmount)}
             </button>
           ))}
           <button type="button" onClick={() => props.setAmount(Math.max(0, shownBalance))}>
@@ -1799,24 +2060,38 @@ function HostView(props: {
             <p>{props.t(`${props.room.currentRace.bets.length}件のベットを受付済み`, `${props.room.currentRace.bets.length} bets placed`)}</p>
           </div>
         </div>
-        <div className="bet-log">
-          {props.room.currentRace.bets.length === 0 && <p className="muted">{props.t("まだベットはありません。", "No bets yet.")}</p>}
-          {props.room.currentRace.bets.map((bet) => {
-            const player = props.room.players.find((item) => item.id === bet.playerId);
-            const betTarget = getBetPickIds(bet)
-              .map((contestantId) => props.room.contestants.find((item) => item.id === contestantId)?.name)
-              .filter(Boolean)
-              .join(" → ");
-            return (
-              <div className="bet-log-row" key={bet.id}>
-                <span>{player?.name ?? "Unknown"}</span>
-                <strong>{betTarget || "Unknown"}</strong>
-                <span>{props.betTypeLabels[bet.type].title}</span>
-                <strong>{currency.format(bet.amount)}</strong>
-                {bet.placedBy === "host" && <em>{props.t("代行", "Proxy")}</em>}
+        <div className="bet-log-window">
+          {props.room.currentRace.bets.length === 0 ? (
+            <p className="muted">{props.t("まだベットはありません。", "No bets yet.")}</p>
+          ) : (
+            <>
+              <div className="bet-log-head">
+                <span>{props.t("参加者", "Bettor")}</span>
+                <span>{props.t("対象", "Pick")}</span>
+                <span>{props.t("式", "Type")}</span>
+                <span>{props.t("額", "Amount")}</span>
+                <span>{props.t("入力", "By")}</span>
               </div>
-            );
-          })}
+              <div className="bet-log">
+                {[...props.room.currentRace.bets].reverse().map((bet) => {
+                  const player = props.room.players.find((item) => item.id === bet.playerId);
+                  const betTarget = getBetPickIds(bet)
+                    .map((contestantId) => props.room.contestants.find((item) => item.id === contestantId)?.name)
+                    .filter(Boolean)
+                    .join(" → ");
+                  return (
+                    <div className="bet-log-row" key={bet.id}>
+                      <span>{player?.name ?? "Unknown"}</span>
+                      <strong>{betTarget || "Unknown"}</strong>
+                      <span>{props.betTypeLabels[bet.type].title}</span>
+                      <strong>{currency.format(bet.amount)}</strong>
+                      <em>{bet.placedBy === "host" ? props.t("代行", "Proxy") : props.t("本人", "Self")}</em>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -1888,6 +2163,11 @@ function RankingView(props: {
   t: Translate;
 }) {
   const latestHistory = props.room.raceHistory.at(-1);
+  const podiumPlayers = [
+    props.ranking[1] ? { player: props.ranking[1], rank: 2 } : undefined,
+    props.ranking[0] ? { player: props.ranking[0], rank: 1 } : undefined,
+    props.ranking[2] ? { player: props.ranking[2], rank: 3 } : undefined,
+  ].filter((item): item is { player: Player; rank: number } => Boolean(item));
 
   return (
     <div className="screen-stack">
@@ -1919,10 +2199,10 @@ function RankingView(props: {
               <p>{props.t("マイナス残高の人も最後まで表示します", "Negative balances stay visible until the end")}</p>
             </div>
           </div>
-              <div className="podium-grid">
-            {props.ranking.slice(0, 3).map((player, index) => (
-              <div className={`podium-card rank-${index + 1}`} key={player.id}>
-                <span className="podium-rank">{index + 1}</span>
+          <div className="podium-grid">
+            {podiumPlayers.map(({ player, rank }) => (
+              <div className={`podium-card rank-${rank}`} key={player.id}>
+                <span className="podium-rank">{rank}</span>
                 <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
                   {player.emoji}
                 </span>
@@ -2058,8 +2338,9 @@ function EmojiPicker(props: { value: string; onChange: (emoji: string) => void; 
 }
 
 function PlayerRankRow(props: { player: Player; rank: number; compact?: boolean; t: Translate }) {
+  const rankTone = props.rank <= 3 ? `rank-${props.rank}` : "rank-other";
   return (
-    <div className={props.player.balance <= 0 ? "rank-row bankrupt" : "rank-row"}>
+    <div className={`rank-row ${rankTone} ${props.player.balance <= 0 ? "bankrupt" : ""}`}>
       <span className="rank-number">{props.rank}</span>
       <span className="avatar" style={{ "--accent": props.player.accent } as CSSProperties}>
         {props.player.emoji}

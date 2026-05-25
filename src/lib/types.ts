@@ -1,7 +1,7 @@
 export type BetType = "win" | "place" | "exacta" | "trifecta";
 export type RaceStatus = "setup" | "betting" | "closed" | "settled";
 export type ThemeName = "neon" | "pop" | "minimal" | "party" | "garden" | "candy" | "sky";
-export type LanguageName = "ja" | "en";
+export type LanguageName = "ja" | "en" | "zh" | "ko" | "es" | "fr" | "de" | "it" | "uk";
 export type AppRole = "host" | "player";
 
 export type RoomSettings = {

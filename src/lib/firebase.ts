@@ -37,7 +37,7 @@ export function getFirebaseIssueKind(error: unknown): FirebaseIssueKind {
 async function getFirebaseServices() {
   if (!isFirebaseConfigured) return null;
 
-  const [{ initializeApp, getApps }, { getDatabase, ref, get, onValue, set }, { getAuth, signInAnonymously }] =
+  const [{ initializeApp, getApps }, { getDatabase, ref, get, onValue, set, remove }, { getAuth, signInAnonymously }] =
     await Promise.all([import("firebase/app"), import("firebase/database"), import("firebase/auth")]);
 
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
@@ -47,7 +47,7 @@ async function getFirebaseServices() {
   }
 
   const db = getDatabase(app);
-  return { db, ref, get, onValue, set };
+  return { db, ref, get, onValue, set, remove };
 }
 
 export async function subscribeFirebaseRoom(roomId: string, callback: SyncCallback) {
@@ -80,4 +80,13 @@ export async function saveFirebaseRoom(room: Room) {
   if (!services) return;
   const { db, ref, set } = services;
   await set(ref(db, `rooms/${room.id}`), { ...room, updatedAt: Date.now() });
+}
+
+export async function deleteFirebaseRoom(roomId: string) {
+  if (!isFirebaseConfigured) return;
+
+  const services = await getFirebaseServices();
+  if (!services) return;
+  const { db, ref, remove } = services;
+  await remove(ref(db, `rooms/${roomId}`));
 }

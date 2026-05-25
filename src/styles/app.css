@@ -289,9 +289,8 @@ button:disabled {
 }
 
 .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -322,7 +321,7 @@ p {
 }
 
 h1 {
-  max-width: 190px;
+  max-width: 100%;
   font-size: 28px;
   line-height: 1.02;
   letter-spacing: 0;
@@ -345,13 +344,18 @@ h2 {
 }
 
 .top-actions {
+  display: grid;
+  grid-template-columns: minmax(68px, 0.7fr) minmax(128px, 1fr) 46px;
   gap: 8px;
 }
 
-.language-button {
-  min-width: 48px;
-  justify-content: center;
-  padding: 0 10px;
+.language-select {
+  width: 100%;
+  min-width: 86px;
+  min-height: 44px;
+  padding: 0 28px 0 12px;
+  border-radius: 999px;
+  font-weight: 900;
 }
 
 .pill-button,
@@ -596,14 +600,33 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: var(--warn);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  font-weight: 1000;
+  font-size: 18px;
+}
+
+.rank-row.rank-1 .rank-number {
+  color: #3a2600;
   background:
     radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.85), transparent 22%),
     linear-gradient(135deg, rgba(255, 217, 92, 0.95), rgba(180, 126, 29, 0.92));
   box-shadow: 0 8px 20px rgba(180, 126, 29, 0.18);
-  color: #3a2600;
-  font-weight: 1000;
-  font-size: 18px;
+}
+
+.rank-row.rank-2 .rank-number {
+  color: #27313d;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.9), transparent 22%),
+    linear-gradient(135deg, #f5f8ff, #aebdcd);
+}
+
+.rank-row.rank-3 .rank-number {
+  color: #3f1e0a;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.78), transparent 22%),
+    linear-gradient(135deg, #ffd1a6, #c36c34);
 }
 
 .avatar {
@@ -739,6 +762,86 @@ h2 {
 
 .share-card strong {
   overflow-wrap: anywhere;
+}
+
+.room-list-card {
+  display: grid;
+  gap: 10px;
+}
+
+.room-list {
+  display: grid;
+  gap: 8px;
+}
+
+.room-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.room-list-row.current {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.room-list-row div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.room-list-row strong,
+.room-list-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-list-row span,
+.room-list-row em {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.room-list-row em {
+  font-style: normal;
+  font-weight: 900;
+}
+
+.room-list-row em.complete {
+  color: var(--warn);
+}
+
+.room-list-row button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 900;
+}
+
+.room-list-row button:disabled {
+  opacity: 0.5;
+}
+
+.room-list-row .delete-room-button {
+  grid-column: 2 / -1;
+  color: #fff;
+  border-color: rgba(255, 111, 145, 0.46);
+  background: color-mix(in srgb, var(--danger) 72%, #3b1022);
 }
 
 .primary-button,
@@ -991,7 +1094,7 @@ select option {
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 7px;
 }
 
@@ -1306,6 +1409,47 @@ select option {
 .bet-log-row em {
   color: var(--accent);
   font-style: normal;
+}
+
+.bet-log-window {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.bet-log-window > .muted {
+  padding: 14px;
+}
+
+.bet-log-head,
+.bet-log-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 52px 62px 42px;
+}
+
+.bet-log-head {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.bet-log {
+  max-height: 246px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bet-log-row {
+  min-height: 44px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
 }
 
 .order-ticket {
@@ -1629,17 +1773,22 @@ select option {
 .podium-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  align-items: end;
   gap: 8px;
   margin-bottom: 10px;
 }
 
 .podium-card {
   position: relative;
+  min-height: 0;
+  height: 128px;
   min-width: 0;
+  align-self: end;
   display: grid;
   justify-items: center;
   gap: 4px;
-  padding: 34px 8px 12px;
+  align-content: end;
+  padding: 26px 7px 9px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.07);
@@ -1656,15 +1805,18 @@ select option {
 }
 
 .podium-card.rank-1 {
+  height: 144px;
   border-color: rgba(255, 217, 92, 0.68);
   box-shadow: 0 14px 34px rgba(255, 207, 91, 0.16);
 }
 
 .podium-card.rank-2 {
+  height: 134px;
   border-color: rgba(202, 213, 226, 0.58);
 }
 
 .podium-card.rank-3 {
+  height: 126px;
   border-color: rgba(223, 142, 91, 0.58);
 }
 
@@ -1700,9 +1852,9 @@ select option {
 }
 
 .podium-card .avatar {
-  width: 56px;
-  height: 56px;
-  font-size: 22px;
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
 }
 
 .podium-card strong,
@@ -1720,7 +1872,7 @@ select option {
 
 .podium-card b {
   color: var(--warn);
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .result-summary.full {
@@ -1994,6 +2146,15 @@ select option {
     width: min(720px, calc(100vw - 48px));
   }
 
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .top-actions {
+    grid-template-columns: auto 152px 46px;
+  }
+
   .bottom-nav {
     width: min(684px, calc(100vw - 72px));
   }
@@ -2054,13 +2215,18 @@ select option {
     grid-column: auto;
   }
 
+  .bet-log-head,
   .bet-log-row {
-    grid-template-columns: 1fr 1fr auto auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 58px 70px 48px;
   }
 
   .payout-head,
   .payout-row {
     grid-template-columns: minmax(0, 1.3fr) 74px 82px 92px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
