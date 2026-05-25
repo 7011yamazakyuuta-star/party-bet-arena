@@ -118,6 +118,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .app-shell {
   min-height: 100dvh;
   display: grid;
@@ -1080,6 +1085,18 @@ select option {
   border-radius: 14px;
 }
 
+.inline-form .add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--danger), #ff8f70);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--danger) 24%, transparent);
+  font-weight: 900;
+}
+
 .toggle-label {
   min-width: 72px;
   min-height: 48px;
@@ -1142,13 +1159,30 @@ select option {
   white-space: nowrap;
 }
 
-.mini-player span:last-child {
+.mini-player .player-meta {
   color: var(--muted);
   font-size: 12px;
 }
 
+.delete-player-button,
 .mini-player input[type="range"] {
   grid-column: 1 / -1;
+}
+
+.delete-player-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  border-radius: 12px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-weight: 900;
+}
+
+.mini-player input[type="range"] {
   width: 100%;
   min-height: 28px;
   padding: 0;
@@ -1688,6 +1722,36 @@ select option {
   margin-bottom: 12px;
 }
 
+.result-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.result-flow span {
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.result-flow span.active {
+  border-color: var(--line-strong);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.result-flow span.done {
+  color: var(--text);
+}
+
 .result-chip {
   min-height: 50px;
   display: flex;
@@ -1711,6 +1775,17 @@ select option {
 
 .result-chip.selected {
   border-color: var(--line-strong);
+}
+
+.result-help {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.next-round-button {
+  margin-top: 10px;
 }
 
 .result-line {
@@ -1822,7 +1897,7 @@ select option {
   }
 
   .participant-form {
-    grid-template-columns: minmax(0, 1fr) 96px 46px;
+    grid-template-columns: minmax(0, 1fr) 96px 92px;
   }
 
   .inline-form button {

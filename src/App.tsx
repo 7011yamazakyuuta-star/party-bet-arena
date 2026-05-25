@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Settings2,
   Sparkles,
+  Trash2,
   Trophy,
   UserPlus,
   Users,
@@ -430,6 +431,39 @@ function App() {
     showToast(t("参加者を追加しました。", "Bettor added."));
   }
 
+  function handleDeletePlayer(playerId: string) {
+    const player = room.players.find((item) => item.id === playerId);
+    if (!player) return;
+    const confirmed = window.confirm(
+      t(
+        `${player.name}を参加者から削除しますか？この勝負で入っているベットも外れます。`,
+        `Remove ${player.name} from bettors? Their bets in this round will be removed too.`,
+      ),
+    );
+    if (!confirmed) return;
+
+    const fallbackPlayerId = room.players.find((item) => item.id !== playerId)?.id ?? "";
+    updateRoom((current) => ({
+      ...current,
+      players: current.players.filter((item) => item.id !== playerId),
+      currentRace: {
+        ...current.currentRace,
+        bets: current.currentRace.bets.filter((bet) => bet.playerId !== playerId),
+      },
+      raceHistory: current.raceHistory.map((entry) => ({
+        ...entry,
+        payouts: entry.payouts.filter((payout) => payout.playerId !== playerId),
+      })),
+      updatedAt: Date.now(),
+    }));
+    if (proxyPlayerId === playerId) setProxyPlayerId(fallbackPlayerId);
+    if (bonusPlayerId === playerId) setBonusPlayerId(fallbackPlayerId);
+    if (session.playerId === playerId) {
+      setSession((current) => ({ ...current, playerId: undefined }));
+    }
+    showToast(t(`${player.name}を削除しました。`, `${player.name} removed.`));
+  }
+
   function handleAddContestant() {
     if (room.contestants.length >= room.settings.maxContestants) {
       showToast(t(`勝負するプレイヤーは最大${room.settings.maxContestants}人までです。`, `Up to ${room.settings.maxContestants} contestants can play.`));
@@ -619,12 +653,16 @@ function App() {
       return;
     }
     commitRoom(settleRoom(room, resultIds));
-    setTab("ranking");
-    showToast(t("結果を確定して配当を反映しました。", "Results settled and payouts applied."));
+    showToast(t("この勝負の払戻を反映しました。次の勝負へ進めます。", "Payouts applied for this round. You can start the next round."));
   }
 
   function handleNextRace() {
     const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
+    if (room.currentRace.status !== "settled") {
+      showToast(t("先に順位を入力して、払戻を反映してください。", "Enter results and apply payouts first."));
+      setTab("host");
+      return;
+    }
     if (currentRaceNumber >= room.settings.maxRaces) {
       showToast(t("最終レースまで完了しました。ランキングで結果を確認してください。", "The final race is complete. Check the ranking."));
       setTab("ranking");
@@ -635,6 +673,7 @@ function App() {
     setResultIds([]);
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
+    setTab("bet");
     showToast(t("次の勝負を開始しました。", "Next round started."));
   }
 
@@ -799,6 +838,7 @@ function App() {
                 currentRaceNumber={currentRaceNumber}
                 t={t}
                 onAddPlayer={handleAddPlayer}
+                onDeletePlayer={handleDeletePlayer}
                 onAddContestant={handleAddContestant}
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
@@ -1385,6 +1425,7 @@ function HostView(props: {
   currentRaceNumber: number;
   t: Translate;
   onAddPlayer: () => void;
+  onDeletePlayer: (playerId: string) => void;
   onAddContestant: () => void;
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
@@ -1585,8 +1626,9 @@ function HostView(props: {
             />
             {props.t("代行", "Proxy")}
           </label>
-          <button type="button" onClick={props.onAddPlayer} aria-label={props.t("参加者を追加", "Add bettor")}>
+          <button className="add-button" type="button" onClick={props.onAddPlayer} aria-label={props.t("参加者を追加", "Add bettor")}>
             <Plus size={18} />
+            {props.t("追加", "Add")}
           </button>
         </div>
         <EmojiPicker value={props.newPlayerEmoji} onChange={props.setNewPlayerEmoji} label={props.t("追加する参加者のアイコン", "Icon for the new bettor")} />
@@ -1597,13 +1639,17 @@ function HostView(props: {
                 {player.emoji}
               </span>
               <strong>{player.name}</strong>
-              <span>{player.isOffline ? props.t("代行入力", "Proxy entry") : props.t("本人参加", "Self entry")} / {currency.format(player.balance)}{props.t("コイン", " coins")}</span>
+              <span className="player-meta">{player.isOffline ? props.t("代行入力", "Proxy entry") : props.t("本人参加", "Self entry")} / {currency.format(player.balance)}{props.t("コイン", " coins")}</span>
               <EmojiPicker
                 value={player.emoji}
                 onChange={(emoji) => props.onPlayerEmojiChange(player.id, emoji)}
                 label={props.t(`${player.name}のアイコン`, `${player.name}'s icon`)}
                 compact
               />
+              <button className="delete-player-button" type="button" onClick={() => props.onDeletePlayer(player.id)}>
+                <Trash2 size={16} />
+                {props.t("削除", "Delete")}
+              </button>
             </div>
           ))}
         </div>
@@ -1775,8 +1821,17 @@ function HostView(props: {
           <Trophy size={20} />
           <div>
             <h2>{props.t("結果入力", "Enter Results")}</h2>
-            <p>{props.t("1位から順にタップして確定", "Tap players in finishing order")}</p>
+            <p>{props.t("毎回の勝負後に順位を入れて、払戻を反映します。", "After each round, enter ranks and apply payouts.")}</p>
           </div>
+        </div>
+        <div className="result-flow">
+          <span className={props.room.currentRace.status === "settled" ? "done" : "active"}>{props.t("1. 順位入力", "1. Rank")}</span>
+          <span className={props.room.currentRace.status === "settled" ? "done" : ""}>{props.t("2. 払戻反映", "2. Payout")}</span>
+          <span className={props.room.currentRace.status === "settled" ? "active" : ""}>
+            {props.currentRaceNumber >= props.room.settings.maxRaces
+              ? props.t("3. 最終結果", "3. Final")
+              : props.t("3. 次の勝負", "3. Next")}
+          </span>
         </div>
         <div className="result-picks">
           {props.room.contestants.map((contestant) => {
@@ -1794,13 +1849,27 @@ function HostView(props: {
             );
           })}
         </div>
-        <button className="primary-button" type="button" onClick={props.onSettle}>
-          {props.t("結果を確定", "Settle Results")}
+        <button className="primary-button" type="button" onClick={props.onSettle} disabled={props.room.currentRace.status === "settled"}>
+          {props.room.currentRace.status === "settled"
+            ? props.t("払戻を反映済み", "Payouts applied")
+            : props.t("この勝負の払戻を反映", "Apply this round's payouts")}
           <Check size={20} />
         </button>
-        <button className="secondary-button full" type="button" onClick={props.onNextRace}>
-          <RotateCcw size={18} />
-          {props.t("次の勝負へ", "Next round")}
+        <p className="result-help">
+          {props.room.currentRace.status === "settled"
+            ? props.t("この勝負は確定済みです。続ける場合は次の勝負へ進んでください。", "This round is settled. Continue to the next round when ready.")
+            : props.t("順位をすべて選んでから払戻を反映してください。ここではゲーム全体は終了しません。", "Choose every rank, then apply payouts. This does not end the whole game.")}
+        </p>
+        <button
+          className="secondary-button full next-round-button"
+          type="button"
+          onClick={props.onNextRace}
+          disabled={props.room.currentRace.status !== "settled"}
+        >
+          <ChevronRight size={18} />
+          {props.currentRaceNumber >= props.room.settings.maxRaces
+            ? props.t("最終結果を見る", "View final ranking")
+            : props.t("次の勝負へ進む", "Start next round")}
         </button>
       </section>
     </div>
