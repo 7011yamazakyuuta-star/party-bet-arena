@@ -1097,6 +1097,20 @@ select option {
   font-weight: 900;
 }
 
+.participant-form .toggle-label {
+  min-width: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  justify-content: flex-start;
+  color: var(--text);
+}
+
+.participant-form .toggle-label input {
+  width: 22px;
+  min-height: 22px;
+}
+
 .toggle-label {
   min-width: 72px;
   min-height: 48px;
