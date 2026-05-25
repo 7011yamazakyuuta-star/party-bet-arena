@@ -468,12 +468,13 @@ h2 {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  color: var(--accent);
-  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 .timer svg {
   grid-row: span 2;
+  color: var(--accent);
 }
 
 .timer small {
@@ -816,6 +817,44 @@ select option {
 
 .balance-banner div:last-child {
   text-align: right;
+}
+
+.race-mini {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.race-mini div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 9px 8px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.race-mini div:first-child {
+  border-color: var(--line-strong);
+}
+
+.race-mini span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.race-mini strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 14px;
 }
 
 .contestant-list {
@@ -1218,7 +1257,7 @@ select option {
 
 .order-ticket {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--pick-count, 3), minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1421,10 +1460,19 @@ select option {
 
 .third-pick-strip button {
   min-height: 34px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
+}
+
+.third-pick-strip button small {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .third-pick-strip button:disabled {
@@ -1458,6 +1506,66 @@ select option {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.compact-note {
+  margin: -4px 0 12px;
+}
+
+.host-nav-panel {
+  grid-column: 1 / -1;
+}
+
+.host-hidden {
+  display: none;
+}
+
+.host-tabbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.host-tabbar button {
+  min-width: 0;
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: center;
+  align-items: center;
+  gap: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  text-align: left;
+}
+
+.host-tabbar button svg {
+  grid-row: span 2;
+  color: var(--accent);
+}
+
+.host-tabbar strong,
+.host-tabbar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-tabbar span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.host-tabbar button.selected {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.host-race-mini {
+  margin-top: 4px;
 }
 
 .result-mode-panel {
@@ -1697,14 +1805,24 @@ select option {
   }
 
   .race-hero,
+  .race-mini,
+  .host-nav-panel,
   .leader-preview.full,
   .result-summary,
   .sticky-action {
     grid-column: 1 / -1;
   }
 
+  .host-tabbar {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
   .inline-form {
     grid-template-columns: minmax(0, 1fr) 70px 82px 72px 46px;
+  }
+
+  .participant-form {
+    grid-template-columns: minmax(0, 1fr) 96px 46px;
   }
 
   .inline-form button {
@@ -1770,6 +1888,7 @@ select option {
   .inline-form,
   .settings-grid,
   .player-grid,
+  .race-mini,
   .result-picks {
     grid-template-columns: 1fr;
   }

@@ -1,5 +1,5 @@
 import { createInitialRoom } from "./sample";
-import type { AppRole, LanguageName, Room, ThemeName } from "./types";
+import type { AppRole, LanguageName, Player, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
@@ -84,11 +84,13 @@ export function normalizeRoom(room: Room): Room {
       allowDebt: room.settings?.allowDebt ?? fallback.settings.allowDebt,
       specialBonus: Math.max(0, Math.floor(room.settings?.specialBonus ?? fallback.settings.specialBonus)),
     },
-    players: (room.players ?? fallback.players).map((player, index) => ({
-      ...player,
-      skillRating: player.skillRating ?? Math.max(1, Math.min(9, 5 + index)),
-      emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
-    })),
+    players: (room.players ?? fallback.players).map((player, index) => {
+      const { skillRating: _legacySkillRating, ...cleanPlayer } = player as Player & { skillRating?: number };
+      return {
+        ...cleanPlayer,
+        emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
+      };
+    }),
     contestants: (room.contestants ?? fallback.contestants).map((contestant, index) => ({
       ...contestant,
       icon: normalizeIcon(contestant.icon, index),

@@ -20,7 +20,6 @@ export type Player = {
   balance: number;
   isOffline: boolean;
   accent: string;
-  skillRating: number;
   emoji: string;
 };
 

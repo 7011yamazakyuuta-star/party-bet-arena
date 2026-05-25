@@ -3,10 +3,10 @@ import type { Contestant, Player, Room } from "./types";
 const now = Date.now();
 
 export const defaultPlayers: Player[] = [
-  { id: "p-yuta", name: "ゆうた", balance: 1250, isOffline: false, accent: "#55f3ec", skillRating: 7, emoji: "🎮" },
-  { id: "p-takumi", name: "たくみ", balance: 980, isOffline: false, accent: "#9d7cff", skillRating: 6, emoji: "😎" },
-  { id: "p-ayaka", name: "あやか", balance: 1540, isOffline: true, accent: "#ff9bc8", skillRating: 8, emoji: "🌟" },
-  { id: "p-kento", name: "けんと", balance: 760, isOffline: false, accent: "#ffcf5b", skillRating: 5, emoji: "🚗" },
+  { id: "p-yuta", name: "ゆうた", balance: 1250, isOffline: false, accent: "#55f3ec", emoji: "🎮" },
+  { id: "p-takumi", name: "たくみ", balance: 980, isOffline: false, accent: "#9d7cff", emoji: "😎" },
+  { id: "p-ayaka", name: "あやか", balance: 1540, isOffline: true, accent: "#ff9bc8", emoji: "🌟" },
+  { id: "p-kento", name: "けんと", balance: 760, isOffline: false, accent: "#ffcf5b", emoji: "🚗" },
 ];
 
 export const defaultContestants: Contestant[] = [

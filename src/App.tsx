@@ -56,6 +56,7 @@ type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
 type BetDisplayMode = "cards" | "board";
 type ResultDisplayMode = "ranking" | "payouts";
+type HostSection = "progress" | "settings" | "players" | "contestants";
 
 const themeOrder: ThemeName[] = ["party", "garden", "candy", "sky", "neon", "pop", "minimal"];
 const emojiChoices = [
@@ -179,7 +180,6 @@ function App() {
   const [joinCode, setJoinCode] = useState("");
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerOffline, setNewPlayerOffline] = useState(true);
-  const [newPlayerSkill, setNewPlayerSkill] = useState(5);
   const [newPlayerEmoji, setNewPlayerEmoji] = useState("🎮");
   const [newContestantName, setNewContestantName] = useState("");
   const [newContestantOdds, setNewContestantOdds] = useState(2.5);
@@ -269,6 +269,7 @@ function App() {
   const potentialPayout = getPotentialPayout(room, draftBet);
   const elapsedTime = formatTime(tick - room.currentRace.startedAt);
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
+  const displayRoomName = room.name.trim() || t("名前を入力中", "Editing name");
   const publicUrl = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname;
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
@@ -351,7 +352,6 @@ function App() {
       balance: targetRoom.startingBalance,
       isOffline: false,
       accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][targetRoom.players.length % 4],
-      skillRating: 5,
       emoji: emojiChoices[targetRoom.players.length % emojiChoices.length],
     };
 
@@ -367,7 +367,7 @@ function App() {
   }
 
   function handleRoomNameChange(name: string) {
-    updateRoom((current) => ({ ...current, name: name || t("新しい勝負", "New Match"), updatedAt: Date.now() }));
+    updateRoom((current) => ({ ...current, name, updatedAt: Date.now() }));
   }
 
   async function handleCopyInvite() {
@@ -419,7 +419,6 @@ function App() {
           balance: current.startingBalance,
           isOffline: newPlayerOffline,
           accent: ["#55f3ec", "#9d7cff", "#ffcf5b", "#ff8f70"][current.players.length % 4],
-          skillRating: clampRating(newPlayerSkill),
           emoji: newPlayerEmoji,
         },
       ],
@@ -432,12 +431,11 @@ function App() {
   }
 
   function handleAddContestant() {
-    const name = newContestantName.trim();
-    if (!name) return;
     if (room.contestants.length >= room.settings.maxContestants) {
       showToast(t(`勝負するプレイヤーは最大${room.settings.maxContestants}人までです。`, `Up to ${room.settings.maxContestants} contestants can play.`));
       return;
     }
+    const name = newContestantName.trim() || (newContestantIsCpu ? `CPU${room.contestants.length + 1}` : `Player ${room.contestants.length + 1}`);
 
     updateRoom((current) => ({
       ...current,
@@ -546,16 +544,6 @@ function App() {
         updatedAt: Date.now(),
       };
     });
-  }
-
-  function handlePlayerSkillChange(playerId: string, skillRating: number) {
-    updateRoom((current) => ({
-      ...current,
-      players: current.players.map((player) =>
-        player.id === playerId ? { ...player, skillRating: clampRating(skillRating) } : player,
-      ),
-      updatedAt: Date.now(),
-    }));
   }
 
   function handlePlayerEmojiChange(playerId: string, emoji: string) {
@@ -670,7 +658,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Party Bet Arena</p>
-            <h1>{room.name}</h1>
+            <h1>{displayRoomName}</h1>
           </div>
           <div className="top-actions">
             <button className="pill-button" type="button" onClick={handleHostMode}>
@@ -770,6 +758,8 @@ function App() {
                 potentialPayout={potentialPayout}
                 displayMode={betDisplayMode}
                 setDisplayMode={setBetDisplayMode}
+                elapsedTime={elapsedTime}
+                currentRaceNumber={currentRaceNumber}
                 onPickOrder={handlePickOrder}
                 onPlaceBet={handlePlaceBet}
                 betTypeLabels={betTypeLabels}
@@ -784,8 +774,6 @@ function App() {
                 setNewPlayerName={setNewPlayerName}
                 newPlayerOffline={newPlayerOffline}
                 setNewPlayerOffline={setNewPlayerOffline}
-                newPlayerSkill={newPlayerSkill}
-                setNewPlayerSkill={setNewPlayerSkill}
                 newPlayerEmoji={newPlayerEmoji}
                 setNewPlayerEmoji={setNewPlayerEmoji}
                 newContestantName={newContestantName}
@@ -807,6 +795,8 @@ function App() {
                 resultIds={resultIds}
                 themeCopy={themeCopy}
                 betTypeLabels={betTypeLabels}
+                elapsedTime={elapsedTime}
+                currentRaceNumber={currentRaceNumber}
                 t={t}
                 onAddPlayer={handleAddPlayer}
                 onAddContestant={handleAddContestant}
@@ -814,7 +804,6 @@ function App() {
                 onThemeChange={handleThemeChange}
                 onRoomNameChange={handleRoomNameChange}
                 onStartingBalanceChange={handleStartingBalanceChange}
-                onPlayerSkillChange={handlePlayerSkillChange}
                 onPlayerEmojiChange={handlePlayerEmojiChange}
                 onContestantStrengthChange={handleContestantStrengthChange}
                 onSettingChange={handleSettingChange}
@@ -1050,6 +1039,8 @@ function BetView(props: {
   potentialPayout: number;
   displayMode: BetDisplayMode;
   setDisplayMode: (value: BetDisplayMode) => void;
+  elapsedTime: string;
+  currentRaceNumber: number;
   onPickOrder: (contestantIds: string[]) => void;
   onPlaceBet: () => void;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
@@ -1061,9 +1052,29 @@ function BetView(props: {
   const selectedContestants = props.selectedPickIds
     .map((contestantId) => getContestant(props.room, contestantId))
     .filter((contestant): contestant is NonNullable<ReturnType<typeof getContestant>> => Boolean(contestant));
+  const statusLabel = props.room.currentRace.status === "settled"
+    ? props.t("確定済み", "Settled")
+    : props.room.currentRace.status === "closed"
+      ? props.t("受付終了", "Closed")
+      : props.t("受付中", "Open");
 
   return (
     <div className="screen-stack">
+      <section className="race-mini">
+        <div>
+          <span>{props.t("現在の勝負", "Current round")}</span>
+          <strong>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</strong>
+        </div>
+        <div>
+          <span>{props.t("状態", "Status")}</span>
+          <strong>{statusLabel}</strong>
+        </div>
+        <div>
+          <span>{props.t("経過", "Elapsed")}</span>
+          <strong>{props.elapsedTime}</strong>
+        </div>
+      </section>
+
       {props.sessionRole === "host" && (
         <section className="proxy-strip">
           <div className="section-heading">
@@ -1138,29 +1149,36 @@ function BetView(props: {
         />
       ) : (
         <section className="contestant-list">
-          {props.room.contestants.map((contestant, index) => (
-            <button
-              className={props.selectedPickIds.includes(contestant.id) ? "contestant selected" : "contestant"}
-              key={contestant.id}
-              type="button"
-              onClick={() => props.onPickContestant(contestant.id)}
-            >
-              <span className="rank-chip">{index + 1}</span>
-              <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
-                {contestant.icon}
-              </span>
-              <span className="contestant-name">{contestant.name}</span>
-              <strong>{contestant.odds.toFixed(2)}x</strong>
-              <span className="select-circle">
-                {props.selectedPickIds.includes(contestant.id) ? `${props.selectedPickIds.indexOf(contestant.id) + 1}` : ""}
-              </span>
-            </button>
-          ))}
+          {props.room.contestants.map((contestant, index) => {
+            const selectedIndex = props.selectedPickIds.indexOf(contestant.id);
+            const isSelected = selectedIndex >= 0;
+            const cardValue = pickCount === 1
+              ? `${getEffectiveMultiplier(props.room, props.betType, [contestant]).toFixed(2)}x`
+              : isSelected
+                ? props.t(`${selectedIndex + 1}位`, `#${selectedIndex + 1}`)
+                : props.t("選択", "Pick");
+            return (
+              <button
+                className={isSelected ? "contestant selected" : "contestant"}
+                key={contestant.id}
+                type="button"
+                onClick={() => props.onPickContestant(contestant.id)}
+              >
+                <span className="rank-chip">{index + 1}</span>
+                <span className="avatar" style={{ "--accent": contestant.accent } as CSSProperties}>
+                  {contestant.icon}
+                </span>
+                <span className="contestant-name">{contestant.name}</span>
+                <strong>{cardValue}</strong>
+                <span className="select-circle">{isSelected ? `${selectedIndex + 1}` : ""}</span>
+              </button>
+            );
+          })}
         </section>
       )}
 
       {pickCount > 1 && (
-        <section className="order-ticket">
+        <section className="order-ticket" style={{ "--pick-count": pickCount } as CSSProperties}>
           {Array.from({ length: pickCount }).map((_, index) => {
             const contestant = selectedContestants[index];
             return (
@@ -1278,7 +1296,7 @@ function TicketBoard(props: {
             {contestants.map((column, columnIndex) => {
               const disabled = row.id === column.id;
               const selected = pairPickIds[0] === row.id && pairPickIds[1] === column.id;
-              const pairMultiplier = getEffectiveMultiplier(props.room, "exacta", [row, column]);
+              const pairMultiplier = props.betType === "exacta" ? getEffectiveMultiplier(props.room, "exacta", [row, column]) : null;
               return (
                 <button
                   className={selected ? "matrix-cell selected" : "matrix-cell"}
@@ -1293,7 +1311,7 @@ function TicketBoard(props: {
                   {disabled ? "" : (
                     <>
                       <span>{rowIndex + 1}-{columnIndex + 1}</span>
-                      <strong>{pairMultiplier.toFixed(1)}x</strong>
+                      <strong>{pairMultiplier ? `${pairMultiplier.toFixed(1)}x` : props.t("3着へ", "Pick 3rd")}</strong>
                     </>
                   )}
                 </button>
@@ -1307,6 +1325,11 @@ function TicketBoard(props: {
           <span>{props.t("3着", "3rd")}</span>
           {contestants.map((contestant, index) => {
             const disabled = pairPickIds.includes(contestant.id) || pairPickIds.length < 2;
+            const first = getContestant(props.room, pairPickIds[0]);
+            const second = getContestant(props.room, pairPickIds[1]);
+            const trifectaMultiplier = !disabled && first && second
+              ? getEffectiveMultiplier(props.room, "trifecta", [first, second, contestant])
+              : 0;
             return (
               <button
                 className={thirdPickId === contestant.id ? "selected" : ""}
@@ -1315,7 +1338,8 @@ function TicketBoard(props: {
                 type="button"
                 onClick={() => props.onPickOrder([pairPickIds[0], pairPickIds[1], contestant.id].filter(Boolean))}
               >
-                {index + 1}
+                <strong>{index + 1}</strong>
+                {trifectaMultiplier > 0 && <small>{trifectaMultiplier.toFixed(1)}x</small>}
               </button>
             );
           })}
@@ -1336,8 +1360,6 @@ function HostView(props: {
   setNewPlayerName: (value: string) => void;
   newPlayerOffline: boolean;
   setNewPlayerOffline: (value: boolean) => void;
-  newPlayerSkill: number;
-  setNewPlayerSkill: (value: number) => void;
   newPlayerEmoji: string;
   setNewPlayerEmoji: (value: string) => void;
   newContestantName: string;
@@ -1359,6 +1381,8 @@ function HostView(props: {
   resultIds: string[];
   themeCopy: Record<ThemeName, { label: string; note: string }>;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
+  elapsedTime: string;
+  currentRaceNumber: number;
   t: Translate;
   onAddPlayer: () => void;
   onAddContestant: () => void;
@@ -1366,7 +1390,6 @@ function HostView(props: {
   onThemeChange: (theme: ThemeName) => void;
   onRoomNameChange: (name: string) => void;
   onStartingBalanceChange: (value: number) => void;
-  onPlayerSkillChange: (playerId: string, skillRating: number) => void;
   onPlayerEmojiChange: (playerId: string, emoji: string) => void;
   onContestantStrengthChange: (
     contestantId: string,
@@ -1382,9 +1405,67 @@ function HostView(props: {
   onSettle: () => void;
   onNextRace: () => void;
 }) {
+  const [hostSection, setHostSection] = useState<HostSection>("progress");
+  const hostTabs: Array<{ key: HostSection; label: string; note: string; icon: ReactNode }> = [
+    { key: "progress", label: props.t("進行", "Run"), note: props.t("結果入力とベット確認", "Results and bets"), icon: <Trophy size={18} /> },
+    { key: "settings", label: props.t("基本", "Setup"), note: props.t("勝負名・ルール", "Name and rules"), icon: <Lock size={18} /> },
+    { key: "players", label: props.t("参加者", "Bettors"), note: props.t("代行・ボーナス", "Proxy and bonus"), icon: <Users size={18} /> },
+    { key: "contestants", label: props.t("対戦者", "Racers"), note: props.t("CPU・倍率", "CPU and odds"), icon: <Gamepad2 size={18} /> },
+  ];
+  const hostSectionClass = (section: HostSection) => `host-panel ${hostSection === section ? "" : "host-hidden"}`;
+
   return (
-    <div className="screen-stack">
-      <section className="host-panel">
+    <div className="screen-stack host-stack">
+      <section className="host-panel host-nav-panel">
+        <div className="section-heading">
+          <Settings2 size={20} />
+          <div>
+            <h2>{props.t("管理メニュー", "Host Menu")}</h2>
+            <p>{props.t("必要な操作だけ開くと、結果入力まで迷いにくくなります。", "Open only the area you need to keep the flow clear.")}</p>
+          </div>
+        </div>
+        <div className="host-tabbar" role="tablist" aria-label={props.t("管理メニュー", "Host menu")}>
+          {hostTabs.map((tab) => (
+            <button
+              aria-selected={hostSection === tab.key}
+              className={hostSection === tab.key ? "selected" : ""}
+              key={tab.key}
+              type="button"
+              onClick={() => setHostSection(tab.key)}
+            >
+              {tab.icon}
+              <strong>{tab.label}</strong>
+              <span>{tab.note}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className={hostSectionClass("progress")}>
+        <div className="section-heading">
+          <Radio size={20} />
+          <div>
+            <h2>{props.t("現在の進行", "Current Flow")}</h2>
+            <p>{props.t("ベット画面にも同じレース番号を表示します。", "The bet screen shows the same race number.")}</p>
+          </div>
+        </div>
+        <div className="race-mini host-race-mini">
+          <div>
+            <span>{props.t("レース", "Race")}</span>
+            <strong>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</strong>
+          </div>
+          <div>
+            <span>{props.t("受付済み", "Bets")}</span>
+            <strong>{props.room.currentRace.bets.length}</strong>
+          </div>
+          <div>
+            <span>{props.t("経過", "Elapsed")}</span>
+            <strong>{props.elapsedTime}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className={hostSectionClass("settings")}>
         <div className="section-heading">
           <Lock size={20} />
           <div>
@@ -1486,7 +1567,7 @@ function HostView(props: {
         </p>
       </section>
 
-      <section className="host-panel">
+      <section className={hostSectionClass("players")}>
         <div className="section-heading">
           <Users size={20} />
           <div>
@@ -1494,17 +1575,8 @@ function HostView(props: {
             <p>{props.t("代行入力する人もここで登録", "Register proxy players here too")}</p>
           </div>
         </div>
-        <div className="inline-form">
+        <div className="inline-form participant-form">
           <input value={props.newPlayerName} onChange={(event) => props.setNewPlayerName(event.target.value)} placeholder={props.t("名前", "Name")} />
-          <input
-            className="small-input"
-            type="number"
-            min="1"
-            max="9"
-            value={props.newPlayerSkill}
-            onChange={(event) => props.setNewPlayerSkill(Number(event.target.value))}
-            aria-label={props.t("参加者の強さ", "Bettor strength")}
-          />
           <label className="toggle-label">
             <input
               type="checkbox"
@@ -1525,20 +1597,12 @@ function HostView(props: {
                 {player.emoji}
               </span>
               <strong>{player.name}</strong>
-              <span>{player.isOffline ? props.t("代行", "Proxy") : props.t("本人", "Self")} / {props.t("強さ", "Power")} {player.skillRating}</span>
+              <span>{player.isOffline ? props.t("代行入力", "Proxy entry") : props.t("本人参加", "Self entry")} / {currency.format(player.balance)}{props.t("コイン", " coins")}</span>
               <EmojiPicker
                 value={player.emoji}
                 onChange={(emoji) => props.onPlayerEmojiChange(player.id, emoji)}
                 label={props.t(`${player.name}のアイコン`, `${player.name}'s icon`)}
                 compact
-              />
-              <input
-                type="range"
-                min="1"
-                max="9"
-                value={player.skillRating}
-                onChange={(event) => props.onPlayerSkillChange(player.id, Number(event.target.value))}
-                aria-label={props.t(`${player.name}の強さ`, `${player.name}'s strength`)}
               />
             </div>
           ))}
@@ -1572,7 +1636,7 @@ function HostView(props: {
         </div>
       </section>
 
-      <section className="host-panel">
+      <section className={hostSectionClass("contestants")}>
         <div className="section-heading">
           <Settings2 size={20} />
           <div>
@@ -1580,11 +1644,17 @@ function HostView(props: {
             <p>{props.t("強さに合わせて自動、または倍率を手動調整", "Auto-adjust by power or edit odds manually")}</p>
           </div>
         </div>
+        <p className="host-note compact-note">
+          {props.t(
+            `現在 ${props.room.contestants.length}/${props.room.settings.maxContestants}人。名前を空欄で追加するとCPU名を自動で作ります。`,
+            `${props.room.contestants.length}/${props.room.settings.maxContestants} racers. Leave the name blank to auto-create a CPU name.`,
+          )}
+        </p>
         <div className="inline-form">
           <input
             value={props.newContestantName}
             onChange={(event) => props.setNewContestantName(event.target.value)}
-            placeholder={props.t("対戦者名", "Contestant")}
+            placeholder={props.t("対戦者名（空欄でCPU自動）", "Racer name (blank for CPU)")}
           />
           <input
             className="small-input"
@@ -1671,7 +1741,7 @@ function HostView(props: {
         ))}
       </section>
 
-      <section className="host-panel">
+      <section className={hostSectionClass("progress")}>
         <div className="section-heading">
           <BarChart3 size={20} />
           <div>
@@ -1700,7 +1770,7 @@ function HostView(props: {
         </div>
       </section>
 
-      <section className="host-panel">
+      <section className={hostSectionClass("progress")}>
         <div className="section-heading">
           <Trophy size={20} />
           <div>
