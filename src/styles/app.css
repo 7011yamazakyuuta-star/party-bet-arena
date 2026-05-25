@@ -549,7 +549,8 @@ h2 {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   gap: 8px;
   margin: -4px 0 14px;
   border-color: rgba(255, 111, 145, 0.42);
@@ -560,6 +561,16 @@ h2 {
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.sync-alert button {
+  min-height: 34px;
+  border: 1px solid rgba(255, 111, 145, 0.32);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--danger);
+  background: rgba(255, 111, 145, 0.08);
+  font-weight: 900;
 }
 
 .section-heading {
@@ -1101,6 +1112,21 @@ select option {
 .quick-grid button {
   min-height: 38px;
   border-radius: 999px;
+}
+
+.amount-adjust-grid .minus-quick {
+  color: var(--danger);
+  background: rgba(255, 111, 145, 0.08);
+}
+
+.amount-adjust-grid .plus-quick {
+  color: #0f7f5c;
+  background: rgba(47, 214, 138, 0.11);
+}
+
+.amount-adjust-grid .balance-quick {
+  grid-column: 1 / -1;
+  min-height: 44px;
 }
 
 .payout-preview {
@@ -1781,14 +1807,14 @@ select option {
 .podium-card {
   position: relative;
   min-height: 0;
-  height: 128px;
+  height: 166px;
   min-width: 0;
   align-self: end;
   display: grid;
   justify-items: center;
   gap: 4px;
   align-content: end;
-  padding: 26px 7px 9px;
+  padding: 34px 7px 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.07);
@@ -1805,18 +1831,18 @@ select option {
 }
 
 .podium-card.rank-1 {
-  height: 144px;
+  height: 182px;
   border-color: rgba(255, 217, 92, 0.68);
   box-shadow: 0 14px 34px rgba(255, 207, 91, 0.16);
 }
 
 .podium-card.rank-2 {
-  height: 134px;
+  height: 172px;
   border-color: rgba(202, 213, 226, 0.58);
 }
 
 .podium-card.rank-3 {
-  height: 126px;
+  height: 162px;
   border-color: rgba(223, 142, 91, 0.58);
 }
 
@@ -1852,8 +1878,8 @@ select option {
 }
 
 .podium-card .avatar {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   font-size: 20px;
 }
 
@@ -1863,6 +1889,11 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.12;
+}
+
+.podium-card strong {
+  font-size: 14px;
 }
 
 .podium-card span {
@@ -1872,7 +1903,7 @@ select option {
 
 .podium-card b {
   color: var(--warn);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .result-summary.full {

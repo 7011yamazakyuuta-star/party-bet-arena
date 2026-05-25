@@ -4,6 +4,7 @@ import type { AppRole, LanguageName, Player, Room, ThemeName } from "./types";
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
 const roomSummariesKey = "party-bet-arena:room-summaries";
+const deletedRoomIdsKey = "party-bet-arena:deleted-room-ids";
 
 export type LocalSession = {
   role: AppRole;
@@ -72,6 +73,11 @@ export function loadRoomSummaries(): LocalRoomSummary[] {
 
 export function rememberRoom(room: Room) {
   if (room.isDemo) return loadRoomSummaries();
+  if (loadDeletedRoomIds().includes(room.id)) {
+    const next = loadRoomSummaries().filter((item) => item.id !== room.id);
+    localStorage.setItem(roomSummariesKey, JSON.stringify(next));
+    return next;
+  }
 
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
   const summary: LocalRoomSummary = {
@@ -90,9 +96,36 @@ export function rememberRoom(room: Room) {
 }
 
 export function forgetRoomSummary(roomId: string) {
+  rememberDeletedRoom(roomId);
   const next = loadRoomSummaries().filter((item) => item.id !== roomId);
   localStorage.setItem(roomSummariesKey, JSON.stringify(next));
   return next;
+}
+
+export function restoreRoomSummary(roomId: string) {
+  const next = loadDeletedRoomIds().filter((id) => id !== roomId);
+  localStorage.setItem(deletedRoomIdsKey, JSON.stringify(next));
+}
+
+export function isRoomDeleted(roomId: string) {
+  return loadDeletedRoomIds().includes(roomId);
+}
+
+function loadDeletedRoomIds() {
+  const stored = localStorage.getItem(deletedRoomIdsKey);
+  if (!stored) return [];
+
+  try {
+    const parsed = JSON.parse(stored) as unknown[];
+    return parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    return [];
+  }
+}
+
+function rememberDeletedRoom(roomId: string) {
+  const next = [roomId, ...loadDeletedRoomIds().filter((id) => id !== roomId)].slice(0, 40);
+  localStorage.setItem(deletedRoomIdsKey, JSON.stringify(next));
 }
 
 export function loadSession(): LocalSession {

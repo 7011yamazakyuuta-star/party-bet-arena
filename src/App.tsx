@@ -53,10 +53,12 @@ import {
 } from "./lib/firebase";
 import {
   forgetRoomSummary,
+  isRoomDeleted,
   loadRoom,
   loadRoomSummaries,
   loadSession,
   resetLocalRoom,
+  restoreRoomSummary,
   saveRoom,
   saveSession,
 } from "./lib/storage";
@@ -379,6 +381,7 @@ function App() {
 
     let unsubscribe: undefined | (() => void);
     subscribeFirebaseRoom(room.id, (remoteRoom) => {
+      if (isRoomDeleted(remoteRoom.id)) return;
       setRoom(remoteRoom);
       setRoomSummaries(saveRoom(remoteRoom));
     }).then((cleanup) => {
@@ -497,6 +500,7 @@ function App() {
       players: [...targetRoom.players, player],
       updatedAt: Date.now(),
     };
+    restoreRoomSummary(next.id);
     commitRoom(next);
     setSession((current) => ({ ...current, role: "player", playerId: player.id }));
     setTab("bet");
@@ -519,6 +523,7 @@ function App() {
         showToast(t("ルームが見つかりません。削除済みか、Firebase設定を確認してください。", "Room not found. It may be deleted or Firebase may need setup."));
         return;
       }
+      restoreRoomSummary(remoteRoom.id);
       commitRoom(remoteRoom);
       setSession((current) => ({ ...current, role: "host", playerId: undefined }));
       setProxyPlayerId(remoteRoom.players[0]?.id ?? "");
@@ -556,7 +561,6 @@ function App() {
         await deleteFirebaseRoom(roomId);
       } catch (error) {
         remoteDeleteFailed = true;
-        setSyncIssue(getFirebaseIssueCopy(error, t));
       }
     }
 
@@ -965,6 +969,9 @@ function App() {
           <section className="sync-alert" role="status">
             <Radio size={18} />
             <p>{syncIssue}</p>
+            <button type="button" onClick={() => setSyncIssue("")}>
+              {t("閉じる", "Close")}
+            </button>
           </section>
         )}
 
@@ -1517,13 +1524,28 @@ function BetView(props: {
             <Plus size={20} />
           </button>
         </div>
-        <div className="quick-grid">
+        <div className="quick-grid amount-adjust-grid">
           {quickAmounts.map((quickAmount) => (
-            <button key={quickAmount} type="button" onClick={() => props.setAmount(props.amount + quickAmount)}>
+            <button
+              className="minus-quick"
+              key={`minus-${quickAmount}`}
+              type="button"
+              onClick={() => props.setAmount(Math.max(0, props.amount - quickAmount))}
+            >
+              -{currency.format(quickAmount)}
+            </button>
+          ))}
+          {quickAmounts.map((quickAmount) => (
+            <button
+              className="plus-quick"
+              key={`plus-${quickAmount}`}
+              type="button"
+              onClick={() => props.setAmount(props.amount + quickAmount)}
+            >
               +{currency.format(quickAmount)}
             </button>
           ))}
-          <button type="button" onClick={() => props.setAmount(Math.max(0, shownBalance))}>
+          <button className="balance-quick" type="button" onClick={() => props.setAmount(Math.max(0, shownBalance))}>
             {props.t("所持分", "Balance")}
           </button>
         </div>
