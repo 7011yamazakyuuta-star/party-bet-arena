@@ -408,6 +408,10 @@ h2 {
   margin-bottom: 16px;
 }
 
+.status-strip.status-hidden {
+  display: none;
+}
+
 .status-strip div,
 .metric,
 .join-panel,
@@ -432,13 +436,16 @@ h2 {
 .status-strip div {
   min-height: 58px;
   display: grid;
+  place-items: center;
   gap: 4px;
   padding: 10px;
   border-radius: 18px;
+  text-align: center;
 }
 
 .status-strip strong {
   font-size: 15px;
+  text-align: center;
 }
 
 .online {
@@ -471,6 +478,17 @@ h2 {
 .race-hero p:last-child {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.welcome-hero {
+  min-height: 150px;
+  align-items: flex-end;
+}
+
+.welcome-hero h2 {
+  max-width: 9em;
+  font-size: 28px;
+  line-height: 1.14;
 }
 
 .badge {
@@ -530,9 +548,11 @@ h2 {
 .metric {
   min-height: 88px;
   display: grid;
+  place-items: center;
   gap: 6px;
   padding: 13px;
   border-radius: 18px;
+  text-align: center;
 }
 
 .metric svg {
@@ -608,6 +628,22 @@ h2 {
   gap: 10px;
   padding: 9px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rank-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-row > span:not(.rank-number):not(.avatar):not(.coin) {
+  text-align: center;
+}
+
+.rank-row .coin {
+  justify-self: end;
 }
 
 .leader-preview.full .rank-row {
@@ -974,14 +1010,20 @@ select option {
   background: var(--surface-strong);
 }
 
+.race-mini.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .race-mini div {
   min-width: 0;
   display: grid;
+  place-items: center;
   gap: 3px;
   padding: 9px 8px;
   border: 1px solid var(--line);
   border-radius: 13px;
   background: var(--surface);
+  text-align: center;
 }
 
 .race-mini div:first-child {
@@ -1822,21 +1864,22 @@ select option {
   grid-template-columns: repeat(3, 1fr);
   align-items: end;
   gap: 8px;
-  margin-top: -2px;
+  margin-top: -4px;
   margin-bottom: 8px;
 }
 
 .podium-card {
   position: relative;
   min-height: 0;
-  height: 144px;
+  height: 132px;
   min-width: 0;
   align-self: end;
   display: grid;
+  grid-template-rows: auto auto auto auto;
   justify-items: center;
-  gap: 3px;
-  align-content: end;
-  padding: 34px 6px 13px;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 6px 10px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.07);
@@ -1853,46 +1896,47 @@ select option {
 }
 
 .podium-card.rank-1 {
-  height: 156px;
+  height: 144px;
   border-color: rgba(255, 217, 92, 0.68);
   box-shadow: 0 14px 34px rgba(255, 207, 91, 0.16);
 }
 
 .podium-card.rank-2 {
-  height: 148px;
+  height: 136px;
   border-color: rgba(202, 213, 226, 0.58);
 }
 
 .podium-card.rank-3 {
-  height: 144px;
+  height: 132px;
   border-color: rgba(223, 142, 91, 0.58);
 }
 
 .podium-rank {
-  position: absolute;
-  top: 7px;
-  left: 50%;
+  position: relative;
   width: 34px;
   height: 26px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  transform: translateX(-50%);
-  color: #3a2600;
+  color: #171000;
   background: linear-gradient(135deg, #ffe986, #c99222);
+  border: 2px solid rgba(255, 255, 255, 0.78);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
   font-size: 16px;
   font-weight: 1000;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 
 .podium-card.rank-2 .podium-rank {
-  color: #27313d;
+  color: #152131;
   background: linear-gradient(135deg, #f5f8ff, #aebdcd);
+  border-color: rgba(255, 255, 255, 0.84);
 }
 
 .podium-card.rank-3 .podium-rank {
-  color: #3f1e0a;
+  color: #291100;
   background: linear-gradient(135deg, #ffd1a6, #c36c34);
+  border-color: rgba(255, 255, 255, 0.72);
 }
 
 .podium-card > * {
@@ -1900,8 +1944,8 @@ select option {
 }
 
 .podium-card .avatar {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   font-size: 19px;
 }
 
@@ -1915,18 +1959,22 @@ select option {
 }
 
 .podium-card strong {
+  min-height: 17px;
+  color: var(--text);
   font-size: 13px;
+  font-weight: 1000;
 }
 
-.podium-card span {
+.podium-card span:not(.podium-rank):not(.avatar) {
   color: var(--muted);
   font-size: 12px;
 }
 
 .podium-card b {
   color: var(--warn);
-  font-size: 14px;
-  min-height: 17px;
+  font-size: 15px;
+  min-height: 18px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .result-summary.full {
@@ -2154,7 +2202,7 @@ select option {
   width: min(394px, calc(100vw - 28px));
   min-height: 76px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  grid-template-columns: repeat(var(--nav-count, 4), minmax(0, 1fr));
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--line);
@@ -2163,9 +2211,31 @@ select option {
   background: rgba(12, 22, 42, 0.9);
   backdrop-filter: blur(20px);
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.nav-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 8px;
+  bottom: 8px;
+  left: calc(8px + ((100% - 16px) / var(--nav-count, 4)) * var(--nav-index, 0));
+  width: calc((100% - 16px) / var(--nav-count, 4));
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 28%, transparent);
+  opacity: 0.92;
+  transition:
+    left 0.22s cubic-bezier(0.2, 0.9, 0.2, 1),
+    transform 0.18s ease,
+    opacity 0.18s ease;
+  pointer-events: none;
 }
 
 .bottom-nav button {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   display: grid;
   place-items: center;
@@ -2174,16 +2244,32 @@ select option {
   border-radius: 20px;
   color: var(--muted);
   background: transparent;
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .bottom-nav button.active {
-  color: var(--accent);
-  background: rgba(85, 243, 236, 0.11);
+  color: #ffffff;
+  background: transparent;
+  transform: translateY(-1px);
 }
 
 .bottom-nav span {
   font-size: 11px;
   font-weight: 800;
+}
+
+:root[data-theme="garden"] .bottom-nav button.active,
+:root[data-theme="candy"] .bottom-nav button.active,
+:root[data-theme="sky"] .bottom-nav button.active,
+:root[data-theme="party"] .bottom-nav button.active {
+  color: #ffffff;
+  background: transparent;
+}
+
+:root[data-theme="party"] .nav-indicator {
+  background: linear-gradient(135deg, #25bf45, #1a9869);
 }
 
 @media (min-width: 520px) {

@@ -18,7 +18,7 @@ export const defaultContestants: Contestant[] = [
 
 export const createInitialRoom = (): Room => ({
   id: "DEMO42",
-  name: "カラオケ対決",
+  name: "みんなBET",
   isDemo: true,
   joinCode: "2468",
   hostPin: "0000",

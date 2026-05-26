@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   BarChart3,
   Check,
@@ -346,9 +346,10 @@ function App() {
   }, [language]);
 
   useEffect(() => {
+    if (room.isDemo) return;
     const timer = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [room.isDemo]);
 
   useEffect(() => {
     saveSession(session);
@@ -417,7 +418,7 @@ function App() {
   const potentialPayout = getPotentialPayout(room, draftBet);
   const elapsedTime = formatTime(tick - room.currentRace.startedAt);
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
-  const displayRoomName = room.name.trim() || t("名前を入力中", "Editing name");
+  const displayRoomName = room.isDemo ? t("みんなBET", "Party Bet Arena") : room.name.trim() || t("名前を入力中", "Editing name");
   const publicUrl = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname;
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
@@ -958,7 +959,7 @@ function App() {
           </div>
         </header>
 
-        <section className="status-strip">
+        <section className={room.isDemo && tab === "home" ? "status-strip status-hidden" : "status-strip"}>
           <div>
             <span>{t("ルーム", "Room")}</span>
             <strong>{room.id}</strong>
@@ -1187,21 +1188,27 @@ function HomeView(props: {
 
   return (
     <div className="screen-stack">
-      <section className="race-hero">
+      <section className={props.room.isDemo ? "race-hero welcome-hero" : "race-hero"}>
         <div>
-          <p className="badge">{props.room.isDemo ? props.t("デモ表示", "Demo") : props.t("開催中", "Live")}</p>
-          <h2>{props.t(`第${props.currentRaceNumber}レース`, `Race ${props.currentRaceNumber}`)}</h2>
+          <p className="badge">{props.room.isDemo ? props.t("はじめに", "Start here") : props.t("開催中", "Live")}</p>
+          <h2>
+            {props.room.isDemo
+              ? props.t("みんなで遊ぶ予想ゲーム", "A party prediction game")
+              : props.t(`第${props.currentRaceNumber}レース`, `Race ${props.currentRaceNumber}`)}
+          </h2>
           <p>
             {props.room.isDemo
-              ? props.t("この名前と数値は操作確認用のサンプルです", "Names and numbers here are sample data")
+              ? props.t("まずは遊び方を見て、幹事で始めるか友だちとして参加するかを選んでください。", "Check the flow, then choose host or friend mode.")
               : props.t("友だちのスマホから同じルームに参加できます", "Friends can join this room from their phones")}
           </p>
         </div>
-        <div className="timer">
-          <Radio size={18} />
-          <span>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</span>
-          <small>{props.t(`経過 ${props.elapsedTime}`, `Elapsed ${props.elapsedTime}`)}</small>
-        </div>
+        {!props.room.isDemo && (
+          <div className="timer">
+            <Radio size={18} />
+            <span>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</span>
+            <small>{props.t(`経過 ${props.elapsedTime}`, `Elapsed ${props.elapsedTime}`)}</small>
+          </div>
+        )}
       </section>
 
       <section className="guide-panel">
@@ -1305,38 +1312,42 @@ function HomeView(props: {
         </section>
       )}
 
-      <section className="metric-grid">
-        <Metric icon={<Users size={20} />} label={props.t("参加者", "Bettors")} value={props.room.players.length.toString()} />
-        <Metric icon={<Gamepad2 size={20} />} label={props.t("対戦者", "Players")} value={props.room.contestants.length.toString()} />
-        <Metric icon={<CircleDollarSign size={20} />} label={props.t("ベット数", "Bets")} value={betCount.toString()} />
-      </section>
+      {!props.room.isDemo && (
+        <>
+          <section className="metric-grid">
+            <Metric icon={<Users size={20} />} label={props.t("参加者", "Bettors")} value={props.room.players.length.toString()} />
+            <Metric icon={<Gamepad2 size={20} />} label={props.t("対戦者", "Players")} value={props.room.contestants.length.toString()} />
+            <Metric icon={<CircleDollarSign size={20} />} label={props.t("ベット数", "Bets")} value={betCount.toString()} />
+          </section>
 
-      <section className="leader-preview">
-        <div className="section-heading">
-          <Trophy size={20} />
-          <div>
-            <h2>{props.t("ランキング", "Ranking")}</h2>
-            <p>{props.t("保有コイン順でリアルタイム更新", "Updates by current coin balance")}</p>
-          </div>
-        </div>
-        {props.ranking.slice(0, 3).map((player, index) => (
-          <PlayerRankRow key={player.id} player={player} rank={index + 1} compact t={props.t} />
-        ))}
-      </section>
+          <section className="leader-preview">
+            <div className="section-heading">
+              <Trophy size={20} />
+              <div>
+                <h2>{props.t("ランキング", "Ranking")}</h2>
+                <p>{props.t("保有コイン順でリアルタイム更新", "Updates by current coin balance")}</p>
+              </div>
+            </div>
+            {props.ranking.slice(0, 3).map((player, index) => (
+              <PlayerRankRow key={player.id} player={player} rank={index + 1} compact t={props.t} />
+            ))}
+          </section>
 
-      <section className="action-row">
-        <button className="primary-button" type="button" onClick={props.onBetTab}>
-          {props.t("ベットへ", "Go bet")}
-          <ChevronRight size={22} />
-        </button>
-        <button className="secondary-button" type="button" onClick={props.onCreateRoom}>
-          <Plus size={18} />
-          {props.room.isDemo ? props.t("本番ルーム", "Live room") : props.t("新規ルーム", "New room")}
-        </button>
-        <button className="secondary-button icon-only" type="button" aria-label={props.t("デモリセット", "Reset demo")} onClick={props.onResetDemo}>
-          <RotateCcw size={18} />
-        </button>
-      </section>
+          <section className="action-row">
+            <button className="primary-button" type="button" onClick={props.onBetTab}>
+              {props.t("ベットへ", "Go bet")}
+              <ChevronRight size={22} />
+            </button>
+            <button className="secondary-button" type="button" onClick={props.onCreateRoom}>
+              <Plus size={18} />
+              {props.t("新規ルーム", "New room")}
+            </button>
+            <button className="secondary-button icon-only" type="button" aria-label={props.t("デモリセット", "Reset demo")} onClick={props.onResetDemo}>
+              <RotateCcw size={18} />
+            </button>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -1380,7 +1391,7 @@ function BetView(props: {
 
   return (
     <div className="screen-stack">
-      <section className="race-mini">
+      <section className={props.room.isDemo ? "race-mini two-up" : "race-mini"}>
         <div>
           <span>{props.t("現在の勝負", "Current round")}</span>
           <strong>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</strong>
@@ -1389,10 +1400,12 @@ function BetView(props: {
           <span>{props.t("状態", "Status")}</span>
           <strong>{statusLabel}</strong>
         </div>
-        <div>
-          <span>{props.t("経過", "Elapsed")}</span>
-          <strong>{props.elapsedTime}</strong>
-        </div>
+        {!props.room.isDemo && (
+          <div>
+            <span>{props.t("経過", "Elapsed")}</span>
+            <strong>{props.elapsedTime}</strong>
+          </div>
+        )}
       </section>
 
       {props.sessionRole === "host" && (
@@ -1783,7 +1796,7 @@ function HostView(props: {
             <p>{props.t("ベット画面にも同じレース番号を表示します。", "The bet screen shows the same race number.")}</p>
           </div>
         </div>
-        <div className="race-mini host-race-mini">
+        <div className={props.room.isDemo ? "race-mini host-race-mini two-up" : "race-mini host-race-mini"}>
           <div>
             <span>{props.t("レース", "Race")}</span>
             <strong>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</strong>
@@ -1792,10 +1805,12 @@ function HostView(props: {
             <span>{props.t("受付済み", "Bets")}</span>
             <strong>{props.room.currentRace.bets.length}</strong>
           </div>
-          <div>
-            <span>{props.t("経過", "Elapsed")}</span>
-            <strong>{props.elapsedTime}</strong>
-          </div>
+          {!props.room.isDemo && (
+            <div>
+              <span>{props.t("経過", "Elapsed")}</span>
+              <strong>{props.elapsedTime}</strong>
+            </div>
+          )}
         </div>
       </section>
 
@@ -2385,22 +2400,49 @@ function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (
     { key: "host", label: props.t("管理", "Host"), icon: <Settings2 size={22} />, hostOnly: true },
     { key: "ranking", label: props.t("順位", "Ranks"), icon: <Wallet size={22} /> },
   ];
+  const visibleTabs = tabs.filter((item) => props.role === "host" || !item.hostOnly);
+  const activeIndex = Math.max(0, visibleTabs.findIndex((item) => item.key === props.active));
+  const navStyle = {
+    "--nav-count": visibleTabs.length,
+    "--nav-index": activeIndex,
+  } as CSSProperties;
+
+  const moveToPointer = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!event.isPrimary) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientX - rect.left) / Math.max(rect.width, 1);
+    const nextIndex = Math.max(0, Math.min(visibleTabs.length - 1, Math.floor(ratio * visibleTabs.length)));
+    const nextTab = visibleTabs[nextIndex];
+    if (nextTab && nextTab.key !== props.active) {
+      props.onChange(nextTab.key);
+    }
+  };
 
   return (
-    <nav className="bottom-nav" aria-label={props.t("メインナビゲーション", "Main navigation")}>
-      {tabs
-        .filter((item) => props.role === "host" || !item.hostOnly)
-        .map((item) => (
-          <button
-            className={props.active === item.key ? "active" : ""}
-            type="button"
-            key={item.key}
-            onClick={() => props.onChange(item.key)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
+    <nav
+      className="bottom-nav"
+      aria-label={props.t("メインナビゲーション", "Main navigation")}
+      style={navStyle}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        moveToPointer(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.buttons === 1) moveToPointer(event);
+      }}
+    >
+      <span className="nav-indicator" aria-hidden="true" />
+      {visibleTabs.map((item) => (
+        <button
+          className={props.active === item.key ? "active" : ""}
+          type="button"
+          key={item.key}
+          onClick={() => props.onChange(item.key)}
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </button>
+      ))}
     </nav>
   );
 }
