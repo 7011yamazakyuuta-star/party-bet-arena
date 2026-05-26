@@ -47,7 +47,11 @@ import {
   deleteFirebaseRoom,
   fetchFirebaseRoom,
   getFirebaseIssueKind,
+  getFirebaseUid,
   isFirebaseConfigured,
+  joinFirebaseRoom,
+  saveFirebaseBet,
+  saveFirebasePlayer,
   saveFirebaseRoom,
   subscribeFirebaseRoom,
 } from "./lib/firebase";
@@ -314,7 +318,7 @@ function App() {
   const [amount, setAmount] = useState(100);
   const [betDisplayMode, setBetDisplayMode] = useState<BetDisplayMode>("board");
   const [resultDisplayMode, setResultDisplayMode] = useState<ResultDisplayMode>("ranking");
-  const [proxyPlayerId, setProxyPlayerId] = useState(room.players[0]?.id ?? "");
+  const [proxyPlayerId, setProxyPlayerId] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState(room.id);
   const [joinCode, setJoinCode] = useState("");
@@ -364,9 +368,9 @@ function App() {
   }, [betType]);
 
   useEffect(() => {
-    if (session.role !== "host" || !room.players.length) return;
+    if (session.role !== "host" || !proxyPlayerId) return;
     if (!room.players.some((player) => player.id === proxyPlayerId)) {
-      setProxyPlayerId(room.players[0].id);
+      setProxyPlayerId("");
     }
   }, [proxyPlayerId, room.players, session.role]);
 
@@ -448,11 +452,22 @@ function App() {
     window.setTimeout(() => setToast(""), 2600);
   }
 
-  function handleCreateRoom() {
-    const next = createBlankRoom(t("新しい勝負", "New Match"));
+  async function handleCreateRoom() {
+    let hostUid: string | undefined;
+    if (isFirebaseConfigured) {
+      try {
+        hostUid = await getFirebaseUid();
+      } catch (error) {
+        const message = getFirebaseIssueCopy(error, t);
+        setSyncIssue(message);
+        showToast(message);
+        return;
+      }
+    }
+    const next = createBlankRoom(t("新しい勝負", "New Match"), hostUid);
     commitRoom(next);
     setSession((current) => ({ ...current, role: "host", playerId: undefined }));
-    setProxyPlayerId(next.players[0]?.id ?? "");
+    setProxyPlayerId("");
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
     setJoinRoomId(next.id);
@@ -474,14 +489,29 @@ function App() {
   async function handleJoinPlayer() {
     const normalizedRoomId = joinRoomId.trim().toUpperCase();
     let targetRoom = room;
+    let firebaseUid: string | undefined;
 
-    if (normalizedRoomId !== room.id) {
-      const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
-      if (!remoteRoom) {
-        showToast(t("ルームが見つかりません。ルームIDを確認してください。", "Room not found. Please check the room ID."));
+    if (isFirebaseConfigured && normalizedRoomId !== "DEMO42") {
+      try {
+        firebaseUid = await getFirebaseUid();
+        await joinFirebaseRoom(normalizedRoomId, joinCode.trim());
+        const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
+        if (!remoteRoom) {
+          showToast(t("ルームが見つかりません。ルームIDを確認してください。", "Room not found. Please check the room ID."));
+          return;
+        }
+        targetRoom = remoteRoom;
+      } catch (error) {
+        const message = getFirebaseIssueKind(error) === "permission"
+          ? t("ルームIDまたは参加コードが違います。", "Room ID or join code is incorrect.")
+          : getFirebaseIssueCopy(error, t);
+        setSyncIssue(message);
+        showToast(message);
         return;
       }
-      targetRoom = remoteRoom;
+    } else if (normalizedRoomId !== room.id) {
+      showToast(t("公開ルームへの参加にはFirebase設定が必要です。", "Firebase setup is required to join a shared room."));
+      return;
     }
 
     if (normalizedRoomId !== targetRoom.id || joinCode.trim() !== targetRoom.joinCode) {
@@ -497,6 +527,7 @@ function App() {
 
     const player: Player = {
       id: crypto.randomUUID(),
+      uid: firebaseUid,
       name,
       balance: targetRoom.startingBalance,
       isOffline: false,
@@ -510,7 +541,18 @@ function App() {
       updatedAt: Date.now(),
     };
     restoreRoomSummary(next.id);
-    commitRoom(next);
+    commitRoom(next, false);
+    if (isFirebaseConfigured && !next.isDemo) {
+      try {
+        await saveFirebasePlayer(next.id, player);
+        setSyncIssue("");
+      } catch (error) {
+        const message = getFirebaseIssueCopy(error, t);
+        setSyncIssue(message);
+        showToast(message);
+        return;
+      }
+    }
     setSession((current) => ({ ...current, role: "player", playerId: player.id }));
     setTab("bet");
     showToast(t(`${name}で参加しました。`, `Joined as ${name}.`));
@@ -533,9 +575,9 @@ function App() {
         return;
       }
       restoreRoomSummary(remoteRoom.id);
-      commitRoom(remoteRoom);
+      commitRoom(remoteRoom, false);
       setSession((current) => ({ ...current, role: "host", playerId: undefined }));
-      setProxyPlayerId(remoteRoom.players[0]?.id ?? "");
+      setProxyPlayerId("");
       setBonusPlayerId(remoteRoom.players[0]?.id ?? "");
       setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
       setSelectedPickIds(remoteRoom.contestants[0]?.id ? [remoteRoom.contestants[0].id] : []);
@@ -578,7 +620,7 @@ function App() {
       const next = resetLocalRoom();
       setRoom(next);
       setSession((current) => ({ ...current, role: "host", playerId: undefined }));
-      setProxyPlayerId(next.players[0]?.id ?? "");
+      setProxyPlayerId("");
       setBonusPlayerId(next.players[0]?.id ?? "");
       setSelectedContestantId(next.contestants[0]?.id ?? "");
       setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
@@ -607,23 +649,48 @@ function App() {
     }
   }
 
-  function handlePlaceBet() {
+  async function handlePlaceBet() {
     const error = validateBet(room, draftBet);
     if (error) {
       showToast(translateBetError(error, t));
       return;
     }
+    let firebaseUid: string | undefined;
+    if (session.role === "player" && isFirebaseConfigured && !room.isDemo) {
+      try {
+        firebaseUid = await getFirebaseUid();
+      } catch (firebaseError) {
+        const message = getFirebaseIssueCopy(firebaseError, t);
+        setSyncIssue(message);
+        showToast(message);
+        return;
+      }
+    }
+    const bet = createBet({ ...draftBet, uid: firebaseUid });
 
     const next = {
       ...room,
       currentRace: {
         ...room.currentRace,
-        bets: [...room.currentRace.bets, createBet(draftBet)],
+        bets: [...room.currentRace.bets, bet],
       },
       updatedAt: Date.now(),
     };
 
-    commitRoom(next);
+    if (session.role === "player" && isFirebaseConfigured && !room.isDemo) {
+      commitRoom(next, false);
+      try {
+        await saveFirebaseBet(room.id, bet);
+        setSyncIssue("");
+      } catch (firebaseError) {
+        const message = getFirebaseIssueCopy(firebaseError, t);
+        setSyncIssue(message);
+        showToast(message);
+        return;
+      }
+    } else {
+      commitRoom(next);
+    }
     showToast(t("ベットを受け付けました。", "Bet placed."));
   }
 
@@ -913,7 +980,7 @@ function App() {
     setRoom(next);
     setSession((current) => ({ ...current, role: "host", playerId: undefined }));
     setTab("home");
-    setProxyPlayerId(next.players[0]?.id ?? "");
+    setProxyPlayerId("");
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
     showToast(t("デモ状態をリセットしました。", "Demo reset."));
@@ -1413,11 +1480,12 @@ function BetView(props: {
           <div className="section-heading">
             <UserPlus size={20} />
             <div>
-              <h2>{props.t("幹事代行入力", "Host Proxy Bet")}</h2>
-              <p>{props.t("スマホを使わない参加者のベットを代理受付", "Place bets for players without their own phone")}</p>
+              <h2>{props.t("ベット入力する参加者", "Bettor to enter")}</h2>
+              <p>{props.t("幹事本人が賭ける場合も、参加者に自分を追加して選びます。", "If the host also bets, add yourself as a bettor and select that name.")}</p>
             </div>
           </div>
           <select value={props.proxyPlayerId} onChange={(event) => props.setProxyPlayerId(event.target.value)}>
+            <option value="">{props.t("代行なし / 参加者を選択", "No proxy / choose bettor")}</option>
             {props.room.players.map((player) => (
               <option key={player.id} value={player.id}>
                 {player.name}
@@ -1454,22 +1522,15 @@ function BetView(props: {
         ))}
       </section>
 
-      <section className="view-toggle" aria-label={props.t("表示切り替え", "View mode")}>
-        <button
-          className={props.displayMode === "board" ? "selected" : ""}
-          type="button"
-          onClick={() => props.setDisplayMode("board")}
-        >
-          {props.t("馬券表", "Ticket board")}
-        </button>
-        <button
-          className={props.displayMode === "cards" ? "selected" : ""}
-          type="button"
-          onClick={() => props.setDisplayMode("cards")}
-        >
-          {props.t("カード", "Cards")}
-        </button>
-      </section>
+      <SegmentedControl
+        ariaLabel={props.t("表示切り替え", "View mode")}
+        value={props.displayMode}
+        onChange={props.setDisplayMode}
+        options={[
+          { value: "board", label: props.t("馬券表", "Ticket board") },
+          { value: "cards", label: props.t("カード", "Cards") },
+        ]}
+      />
 
       {props.displayMode === "board" ? (
         <TicketBoard
@@ -1826,6 +1887,10 @@ function HostView(props: {
           {props.t("勝負名", "Match name")}
           <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder={props.t("例: スマブラ王決定戦", "Example: Smash Finals")} />
         </label>
+        <div className="subsection-heading">
+          <strong>{props.t("メインカラー設定", "Main color theme")}</strong>
+          <span>{props.t("見やすさや雰囲気に合わせて、全員の画面テーマを切り替えます。", "Switch the shared room theme for readability and mood.")}</span>
+        </div>
         <div className="theme-grid">
           {themeOrder.map((theme) => (
             <button
@@ -2137,7 +2202,7 @@ function HostView(props: {
         <div className="section-heading">
           <Trophy size={20} />
           <div>
-            <h2>{props.t("結果入力", "Enter Results")}</h2>
+            <h2>{props.t(`第${props.currentRaceNumber}レース 結果入力`, `Race ${props.currentRaceNumber} Results`)}</h2>
             <p>{props.t("毎回の勝負後に順位を入れて、払戻を反映します。", "After each round, enter ranks and apply payouts.")}</p>
           </div>
         </div>
@@ -2210,22 +2275,15 @@ function RankingView(props: {
   return (
     <div className="screen-stack">
       <section className="result-mode-panel">
-        <div className="view-toggle" aria-label={props.t("結果表示切り替え", "Result view")}>
-          <button
-            className={props.displayMode === "ranking" ? "selected" : ""}
-            type="button"
-            onClick={() => props.setDisplayMode("ranking")}
-          >
-            {props.t("ランキング", "Ranking")}
-          </button>
-          <button
-            className={props.displayMode === "payouts" ? "selected" : ""}
-            type="button"
-            onClick={() => props.setDisplayMode("payouts")}
-          >
-            {props.t("払戻表", "Payouts")}
-          </button>
-        </div>
+        <SegmentedControl
+          ariaLabel={props.t("結果表示切り替え", "Result view")}
+          value={props.displayMode}
+          onChange={props.setDisplayMode}
+          options={[
+            { value: "ranking", label: props.t("ランキング", "Ranking") },
+            { value: "payouts", label: props.t("払戻表", "Payouts") },
+          ]}
+        />
       </section>
 
       {props.displayMode === "ranking" && (
@@ -2393,6 +2451,72 @@ function PlayerRankRow(props: { player: Player; rank: number; compact?: boolean;
   );
 }
 
+function getPointerPosition(event: ReactPointerEvent<HTMLElement>, count: number) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const ratio = (event.clientX - rect.left) / Math.max(rect.width, 1);
+  return Math.max(0, Math.min(count - 1, ratio * count - 0.5));
+}
+
+function SegmentedControl<T extends string>(props: {
+  ariaLabel: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  const activeIndex = Math.max(0, props.options.findIndex((option) => option.value === props.value));
+  const [dragPosition, setDragPosition] = useState<number | null>(null);
+  const switchStyle = {
+    "--toggle-count": props.options.length,
+    "--toggle-position": dragPosition ?? activeIndex,
+  } as CSSProperties;
+
+  const moveToPointer = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!event.isPrimary) return;
+    const nextPosition = getPointerPosition(event, props.options.length);
+    const nextIndex = Math.max(0, Math.min(props.options.length - 1, Math.round(nextPosition)));
+    setDragPosition(nextPosition);
+    if (props.options[nextIndex]?.value !== props.value) {
+      props.onChange(props.options[nextIndex].value);
+    }
+  };
+  const finishDrag = (event?: ReactPointerEvent<HTMLElement>) => {
+    if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setDragPosition(null);
+  };
+
+  return (
+    <section
+      className={dragPosition === null ? "view-toggle" : "view-toggle dragging"}
+      aria-label={props.ariaLabel}
+      style={switchStyle}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        moveToPointer(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.buttons === 1) moveToPointer(event);
+      }}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onLostPointerCapture={finishDrag}
+    >
+      <span className="toggle-indicator" aria-hidden="true" />
+      {props.options.map((option) => (
+        <button
+          className={props.value === option.value ? "selected" : ""}
+          type="button"
+          key={option.value}
+          onClick={() => props.onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (tab: TabKey) => void; t: Translate }) {
   const tabs: Array<{ key: TabKey; label: string; icon: ReactNode; hostOnly?: boolean }> = [
     { key: "home", label: props.t("ホーム", "Home"), icon: <Home size={22} /> },
@@ -2402,25 +2526,32 @@ function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (
   ];
   const visibleTabs = tabs.filter((item) => props.role === "host" || !item.hostOnly);
   const activeIndex = Math.max(0, visibleTabs.findIndex((item) => item.key === props.active));
+  const [dragPosition, setDragPosition] = useState<number | null>(null);
   const navStyle = {
     "--nav-count": visibleTabs.length,
-    "--nav-index": activeIndex,
+    "--nav-position": dragPosition ?? activeIndex,
   } as CSSProperties;
 
   const moveToPointer = (event: ReactPointerEvent<HTMLElement>) => {
     if (!event.isPrimary) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / Math.max(rect.width, 1);
-    const nextIndex = Math.max(0, Math.min(visibleTabs.length - 1, Math.floor(ratio * visibleTabs.length)));
+    const nextPosition = getPointerPosition(event, visibleTabs.length);
+    const nextIndex = Math.max(0, Math.min(visibleTabs.length - 1, Math.round(nextPosition)));
+    setDragPosition(nextPosition);
     const nextTab = visibleTabs[nextIndex];
     if (nextTab && nextTab.key !== props.active) {
       props.onChange(nextTab.key);
     }
   };
+  const finishDrag = (event?: ReactPointerEvent<HTMLElement>) => {
+    if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setDragPosition(null);
+  };
 
   return (
     <nav
-      className="bottom-nav"
+      className={dragPosition === null ? "bottom-nav" : "bottom-nav dragging"}
       aria-label={props.t("メインナビゲーション", "Main navigation")}
       style={navStyle}
       onPointerDown={(event) => {
@@ -2430,6 +2561,9 @@ function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (
       onPointerMove={(event) => {
         if (event.buttons === 1) moveToPointer(event);
       }}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onLostPointerCapture={finishDrag}
     >
       <span className="nav-indicator" aria-hidden="true" />
       {visibleTabs.map((item) => (

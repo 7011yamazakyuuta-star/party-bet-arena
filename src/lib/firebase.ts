@@ -1,7 +1,14 @@
-import type { Room } from "./types";
+import type { Bet, Player, Room } from "./types";
 import { normalizeRoom } from "./storage";
 
 type SyncCallback = (room: Room) => void;
+type FirebaseRoomPayload = Omit<Room, "players" | "contestants" | "currentRace"> & {
+  players: Record<string, Player>;
+  contestants: Record<string, Room["contestants"][number]>;
+  currentRace: Omit<Room["currentRace"], "bets"> & {
+    bets: Record<string, Bet>;
+  };
+};
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -47,7 +54,29 @@ async function getFirebaseServices() {
   }
 
   const db = getDatabase(app);
-  return { db, ref, get, onValue, set, remove };
+  return { auth, db, ref, get, onValue, set, remove };
+}
+
+function listToRecord<T extends { id: string }>(items: T[]) {
+  return Object.fromEntries(items.map((item) => [item.id, item])) as Record<string, T>;
+}
+
+function roomToFirebasePayload(room: Room, hostUid?: string): FirebaseRoomPayload {
+  return {
+    ...room,
+    hostUid: room.hostUid ?? hostUid,
+    players: listToRecord(room.players),
+    contestants: listToRecord(room.contestants),
+    currentRace: {
+      ...room.currentRace,
+      bets: listToRecord(room.currentRace.bets),
+    },
+  };
+}
+
+export async function getFirebaseUid() {
+  const services = await getFirebaseServices();
+  return services?.auth.currentUser?.uid;
 }
 
 export async function subscribeFirebaseRoom(roomId: string, callback: SyncCallback) {
@@ -78,8 +107,49 @@ export async function saveFirebaseRoom(room: Room) {
 
   const services = await getFirebaseServices();
   if (!services) return;
+  const { auth, db, ref, set } = services;
+  const hostUid = room.hostUid ?? auth.currentUser?.uid;
+  const updatedRoom = { ...room, hostUid, updatedAt: Date.now() };
+  await set(ref(db, `rooms/${room.id}`), roomToFirebasePayload(updatedRoom, hostUid));
+  if (hostUid) {
+    await set(ref(db, `roomMembers/${room.id}/${hostUid}`), {
+      role: "host",
+      joinCode: room.joinCode,
+      joinedAt: room.createdAt,
+    });
+  }
+}
+
+export async function joinFirebaseRoom(roomId: string, joinCode: string) {
+  if (!isFirebaseConfigured) return;
+
+  const services = await getFirebaseServices();
+  if (!services?.auth.currentUser) return;
+  const uid = services.auth.currentUser.uid;
   const { db, ref, set } = services;
-  await set(ref(db, `rooms/${room.id}`), { ...room, updatedAt: Date.now() });
+  await set(ref(db, `roomMembers/${roomId}/${uid}`), {
+    role: "player",
+    joinCode,
+    joinedAt: Date.now(),
+  });
+}
+
+export async function saveFirebasePlayer(roomId: string, player: Player) {
+  if (!isFirebaseConfigured) return;
+
+  const services = await getFirebaseServices();
+  if (!services) return;
+  const { db, ref, set } = services;
+  await set(ref(db, `rooms/${roomId}/players/${player.id}`), player);
+}
+
+export async function saveFirebaseBet(roomId: string, bet: Bet) {
+  if (!isFirebaseConfigured) return;
+
+  const services = await getFirebaseServices();
+  if (!services) return;
+  const { db, ref, set } = services;
+  await set(ref(db, `rooms/${roomId}/currentRace/bets/${bet.id}`), bet);
 }
 
 export async function deleteFirebaseRoom(roomId: string) {
@@ -88,5 +158,6 @@ export async function deleteFirebaseRoom(roomId: string) {
   const services = await getFirebaseServices();
   if (!services) return;
   const { db, ref, remove } = services;
+  await remove(ref(db, `roomMembers/${roomId}`));
   await remove(ref(db, `rooms/${roomId}`));
 }

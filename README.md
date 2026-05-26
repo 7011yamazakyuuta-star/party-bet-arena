@@ -75,27 +75,53 @@ cp .env.example .env.local
 
 Firebase Web configの`apiKey`はブラウザに配布される前提の識別子ですが、Database Rulesが本体の防御です。管理者用のサービスアカウント鍵はこのアプリでは使いません。
 
-## Realtime Database Rulesの初期案
+## Realtime Database Rules
 
-開発中のテストモードは公開前に必ず解除してください。最初の身内テスト用には、少なくとも匿名認証済みユーザーだけに制限します。
+本格公開ベースでは、匿名ログイン済みなら誰でもルーム全体を書き換えられる形にはしません。ホストはルーム全体を管理でき、参加者は招待コードで参加登録したあと、自分の参加者情報と自分のBETだけを書き込める形にします。
 
 ```json
 {
   "rules": {
     ".read": false,
     ".write": false,
+    "roomMembers": {
+      "$roomId": {
+        ".write": "auth != null && !newData.exists() && root.child('rooms').child($roomId).child('hostUid').val() === auth.uid",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('rooms').child($roomId).child('hostUid').val() === auth.uid)",
+          ".write": "auth != null && (auth.uid === $uid || root.child('rooms').child($roomId).child('hostUid').val() === auth.uid) && (!newData.exists() || root.child('rooms').child($roomId).child('hostUid').val() === auth.uid || newData.child('joinCode').val() === root.child('rooms').child($roomId).child('joinCode').val())",
+          ".validate": "newData.hasChildren(['role', 'joinCode', 'joinedAt']) && (newData.child('role').val() === 'host' || newData.child('role').val() === 'player') && newData.child('joinedAt').isNumber()"
+        }
+      }
+    },
     "rooms": {
       "$roomId": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['id', 'name', 'joinCode', 'players', 'contestants', 'currentRace'])"
+        ".read": "auth != null && (data.child('hostUid').val() === auth.uid || root.child('roomMembers').child($roomId).child(auth.uid).exists())",
+        ".write": "auth != null && ((!data.exists() && newData.child('hostUid').val() === auth.uid) || data.child('hostUid').val() === auth.uid)",
+        ".validate": "!newData.exists() || (newData.hasChildren(['id', 'hostUid', 'name', 'joinCode', 'contestants', 'currentRace']) && newData.child('id').val() === $roomId && newData.child('hostUid').isString())",
+        "players": {
+          "$playerId": {
+            ".write": "auth != null && (root.child('rooms').child($roomId).child('hostUid').val() === auth.uid || (root.child('roomMembers').child($roomId).child(auth.uid).exists() && newData.child('uid').val() === auth.uid && (!data.exists() || data.child('uid').val() === auth.uid)))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['id', 'name', 'balance', 'isOffline', 'accent', 'emoji']) && newData.child('id').val() === $playerId && newData.child('name').isString() && newData.child('balance').isNumber())"
+          }
+        },
+        "currentRace": {
+          "bets": {
+            "$betId": {
+              ".write": "auth != null && (root.child('rooms').child($roomId).child('hostUid').val() === auth.uid || (root.child('roomMembers').child($roomId).child(auth.uid).exists() && newData.child('uid').val() === auth.uid && root.child('rooms').child($roomId).child('players').child(newData.child('playerId').val()).child('uid').val() === auth.uid))",
+              ".validate": "!newData.exists() || (newData.hasChildren(['id', 'playerId', 'contestantId', 'contestantIds', 'type', 'amount', 'placedBy', 'createdAt']) && newData.child('id').val() === $betId && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && (newData.child('type').val() === 'win' || newData.child('type').val() === 'place' || newData.child('type').val() === 'exacta' || newData.child('type').val() === 'trifecta'))"
+            }
+          }
+        }
       }
     }
   }
 }
 ```
 
-このルールはMVP用です。Room IDを知る匿名ユーザーが同じルームを操作できる前提なので、公開範囲を広げる前に、ホスト権限、参加者権限、招待コード検証をさらに厳密化してください。
+このルールでも、匿名認証は「端末ごとの簡易ID」です。管理者用の強い本人確認が必要な規模にする場合は、Googleログインなどの明示ログインを追加してください。
+
+旧ルールで作成したテストルームは`hostUid`や`uid`が入っていない場合があります。本格公開用ルールへ切り替えた後は、新しくルームを作り直して動作確認してください。
 
 ## GitHub Pages
 

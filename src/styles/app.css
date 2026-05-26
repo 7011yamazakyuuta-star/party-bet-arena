@@ -1224,6 +1224,22 @@ select option {
   margin-bottom: 12px;
 }
 
+.subsection-heading {
+  display: grid;
+  gap: 3px;
+  margin: 12px 0 8px;
+}
+
+.subsection-heading strong {
+  font-size: 14px;
+}
+
+.subsection-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .theme-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1570,27 +1586,56 @@ select option {
 }
 
 .view-toggle {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--toggle-count, 2), minmax(0, 1fr));
   gap: 6px;
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 17px;
   background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.toggle-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 5px;
+  bottom: 5px;
+  left: calc(5px + ((100% - 10px) / var(--toggle-count, 2)) * var(--toggle-position, 0));
+  width: calc((100% - 10px) / var(--toggle-count, 2));
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  transition:
+    left 0.2s cubic-bezier(0.2, 0.9, 0.2, 1),
+    transform 0.18s ease;
+  pointer-events: none;
+}
+
+.view-toggle.dragging .toggle-indicator {
+  transform: scale(1.015);
+  transition: none;
 }
 
 .view-toggle button {
+  position: relative;
+  z-index: 1;
   min-height: 42px;
   border: 0;
   border-radius: 13px;
   color: var(--muted);
   background: transparent;
   font-weight: 900;
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .view-toggle button.selected {
   color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: transparent;
+  transform: translateY(-1px);
 }
 
 .ticket-board {
@@ -1605,7 +1650,7 @@ select option {
 .ticket-board-head,
 .ticket-row {
   display: grid;
-  grid-template-columns: 38px 1fr 68px;
+  grid-template-columns: 48px minmax(0, 1fr) 76px;
   align-items: center;
   gap: 8px;
 }
@@ -1613,15 +1658,27 @@ select option {
 .ticket-board-head {
   color: var(--muted);
   font-size: 12px;
-  padding: 0 4px;
+  padding: 0 10px;
+  text-align: center;
 }
 
 .ticket-row {
   min-height: 56px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 14px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.ticket-row strong,
+.ticket-row > span:last-child {
+  min-width: 0;
+  text-align: center;
+}
+
+.ticket-row .horse-number {
+  justify-self: center;
 }
 
 :root:not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .ticket-row {
@@ -2220,7 +2277,7 @@ select option {
   z-index: 0;
   top: 8px;
   bottom: 8px;
-  left: calc(8px + ((100% - 16px) / var(--nav-count, 4)) * var(--nav-index, 0));
+  left: calc(8px + ((100% - 16px) / var(--nav-count, 4)) * var(--nav-position, 0));
   width: calc((100% - 16px) / var(--nav-count, 4));
   border-radius: 20px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -2231,6 +2288,11 @@ select option {
     transform 0.18s ease,
     opacity 0.18s ease;
   pointer-events: none;
+}
+
+.bottom-nav.dragging .nav-indicator {
+  transform: scale(1.018);
+  transition: none;
 }
 
 .bottom-nav button {

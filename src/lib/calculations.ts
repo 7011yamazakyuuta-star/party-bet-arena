@@ -141,6 +141,7 @@ export function validateBet(room: Room, draft: DraftBet) {
 export function createBet(draft: DraftBet): Bet {
   return {
     id: crypto.randomUUID(),
+    uid: draft.uid,
     playerId: draft.playerId,
     contestantId: draft.contestantIds[0],
     contestantIds: draft.contestantIds,

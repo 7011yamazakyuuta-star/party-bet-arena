@@ -70,7 +70,7 @@ export const createInitialRoom = (): Room => ({
   updatedAt: now,
 });
 
-export const createBlankRoom = (name = "みんなBET Arena"): Room => {
+export const createBlankRoom = (name = "みんなBET Arena", hostUid?: string): Room => {
   const roomId = Math.random().toString(36).slice(2, 8).toUpperCase();
   const joinCode = Math.floor(1000 + Math.random() * 9000).toString();
   const base = createInitialRoom();
@@ -78,6 +78,7 @@ export const createBlankRoom = (name = "みんなBET Arena"): Room => {
   return {
     ...base,
     id: roomId,
+    hostUid,
     name,
     isDemo: false,
     joinCode,

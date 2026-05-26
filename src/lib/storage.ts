@@ -39,6 +39,17 @@ function normalizeIcon(icon: string | undefined, index: number) {
   return legacyContestantIcons[icon] ?? icon;
 }
 
+function normalizeList<T extends { id: string }>(value: unknown, fallback: T[]): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, Partial<T>>).map(([id, item]) => ({
+      ...item,
+      id: item.id ?? id,
+    }) as T);
+  }
+  return fallback;
+}
+
 export function loadRoom() {
   const stored = localStorage.getItem(roomKey);
   if (!stored) return createInitialRoom();
@@ -172,14 +183,14 @@ export function normalizeRoom(room: Room): Room {
       allowDebt: room.settings?.allowDebt ?? fallback.settings.allowDebt,
       specialBonus: Math.max(0, Math.floor(room.settings?.specialBonus ?? fallback.settings.specialBonus)),
     },
-    players: (room.players ?? fallback.players).map((player, index) => {
+    players: normalizeList<Player>((room as unknown as { players?: unknown }).players, fallback.players).map((player, index) => {
       const { skillRating: _legacySkillRating, ...cleanPlayer } = player as Player & { skillRating?: number };
       return {
         ...cleanPlayer,
         emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
       };
     }),
-    contestants: (room.contestants ?? fallback.contestants).map((contestant, index) => ({
+    contestants: normalizeList((room as unknown as { contestants?: unknown }).contestants, fallback.contestants).map((contestant, index) => ({
       ...contestant,
       icon: normalizeIcon(contestant.icon, index),
       strengthRating: contestant.strengthRating ?? Math.max(1, 9 - index),
@@ -191,7 +202,7 @@ export function normalizeRoom(room: Room): Room {
       ...room.currentRace,
       startedAt: room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
       endsAt: room.currentRace?.endsAt ?? room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
-      bets: (room.currentRace?.bets ?? []).map((bet) => ({
+      bets: normalizeList((room.currentRace as unknown as { bets?: unknown } | undefined)?.bets, fallback.currentRace.bets).map((bet) => ({
         ...bet,
         contestantIds: bet.contestantIds?.length ? bet.contestantIds : [bet.contestantId],
       })),

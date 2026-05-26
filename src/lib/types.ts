@@ -16,6 +16,7 @@ export type RoomSettings = {
 
 export type Player = {
   id: string;
+  uid?: string;
   name: string;
   balance: number;
   isOffline: boolean;
@@ -36,6 +37,7 @@ export type Contestant = {
 
 export type Bet = {
   id: string;
+  uid?: string;
   playerId: string;
   contestantId: string;
   contestantIds: string[];
@@ -76,6 +78,7 @@ export type RaceHistoryEntry = {
 
 export type Room = {
   id: string;
+  hostUid?: string;
   name: string;
   isDemo: boolean;
   joinCode: string;
@@ -92,6 +95,7 @@ export type Room = {
 };
 
 export type DraftBet = {
+  uid?: string;
   playerId: string;
   contestantId: string;
   contestantIds: string[];
