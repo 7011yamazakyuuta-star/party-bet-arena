@@ -24,20 +24,19 @@ export function getBetPickIds(bet: Pick<Bet, "contestantId"> & Partial<Pick<Bet,
 }
 
 export function calculateAutoOdds(contestants: Contestant[]) {
-  const powers = contestants.map((contestant) => {
-    const rating = contestant.isCpu ? contestant.cpuLevel : contestant.strengthRating;
-    const normalizedRating = Math.max(1, Math.min(9, rating));
+  const weights = contestants.map((contestant) => {
+    const normalizedRating = Math.max(1, Math.min(9, contestant.cpuLevel || 5));
     return Math.exp((normalizedRating - 5) * 0.36);
   });
-  const totalPower = powers.reduce((sum, power) => sum + power, 0) || 1;
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
   const maxOdds = Math.min(20, Math.max(8, contestants.length * 3.2));
 
   return contestants.map((contestant, index) => {
-    const winProbability = powers[index] / totalPower;
+    const winProbability = weights[index] / totalWeight;
     const fairOdds = 1 / Math.max(0.001, winProbability);
     const playableOdds = 1 + (fairOdds - 1) * 0.72;
     const odds = Math.max(1.1, Math.min(maxOdds, Number(playableOdds.toFixed(1))));
-    return { ...contestant, odds };
+    return { ...contestant, odds, strengthRating: Math.max(1, Math.min(9, contestant.cpuLevel || 5)) };
   });
 }
 
@@ -118,7 +117,8 @@ export function getPotentialPayout(room: Room, draft: DraftBet) {
     .map((contestantId) => getContestant(room, contestantId))
     .filter((contestant): contestant is Contestant => Boolean(contestant));
   if (contestants.length !== requiredPickCount(draft.type)) return 0;
-  return Math.floor(draft.amount * getEffectiveMultiplier(room, draft.type, contestants));
+  const multiplier = draft.multiplier || getEffectiveMultiplier(room, draft.type, contestants);
+  return Math.floor(draft.amount * multiplier);
 }
 
 export function validateBet(room: Room, draft: DraftBet) {
@@ -146,6 +146,7 @@ export function createBet(draft: DraftBet): Bet {
     contestantIds: draft.contestantIds,
     type: draft.type,
     amount: Math.floor(draft.amount),
+    multiplier: Number(draft.multiplier.toFixed(2)),
     placedBy: draft.placedBy,
     createdAt: Date.now(),
   };
@@ -177,7 +178,8 @@ export function settleRoom(room: Room, resultIds: string[]) {
         return room.settings.allowDebt ? afterStake : Math.max(0, afterStake);
       }
 
-      const payout = Math.floor(bet.amount * getEffectiveMultiplier(room, bet.type, contestants));
+      const multiplier = bet.multiplier ?? getEffectiveMultiplier(room, bet.type, contestants);
+      const payout = Math.floor(bet.amount * multiplier);
       summary.payout += payout;
       summary.hits += 1;
       const afterPayout = afterStake + payout;

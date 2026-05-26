@@ -121,6 +121,7 @@ function getBetTypeCopy(t: Translate): Record<BetType, { title: string; note: st
 }
 
 const quickAmounts = [10, 50, 100, 500, 1000, 5000];
+const levelChoices = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const languageOptions: Array<{ value: LanguageName; label: string; short: string }> = [
   { value: "ja", label: "日本語", short: "JP" },
   { value: "en", label: "English", short: "EN" },
@@ -322,7 +323,6 @@ function App() {
   const [newPlayerEmoji, setNewPlayerEmoji] = useState("🎮");
   const [newContestantName, setNewContestantName] = useState("");
   const [newContestantOdds, setNewContestantOdds] = useState(2.5);
-  const [newContestantStrength, setNewContestantStrength] = useState(7);
   const [newContestantCpuLevel, setNewContestantCpuLevel] = useState(7);
   const [newContestantIsCpu, setNewContestantIsCpu] = useState(true);
   const [newContestantEmoji, setNewContestantEmoji] = useState("🤖");
@@ -398,12 +398,20 @@ function App() {
   const activePlayerId = session.role === "host" ? proxyPlayerId : currentPlayer?.id ?? "";
   const activePlayer = room.players.find((player) => player.id === activePlayerId);
   const selectedContestant = getContestant(room, selectedContestantId);
+  const draftContestants = selectedPickIds
+    .map((contestantId) => getContestant(room, contestantId))
+    .filter((contestant): contestant is NonNullable<ReturnType<typeof getContestant>> => Boolean(contestant));
+  const draftMultiplier =
+    draftContestants.length === requiredPickCount(betType)
+      ? getEffectiveMultiplier(room, betType, draftContestants)
+      : 0;
   const draftBet: DraftBet = {
     playerId: activePlayerId,
     contestantId: selectedContestantId,
     contestantIds: selectedPickIds,
     type: betType,
     amount,
+    multiplier: draftMultiplier,
     placedBy: session.role === "host" ? "host" : "self",
   };
   const potentialPayout = getPotentialPayout(room, draftBet);
@@ -699,7 +707,7 @@ function App() {
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
               icon: newContestantEmoji,
-              strengthRating: clampRating(newContestantStrength),
+              strengthRating: clampRating(newContestantCpuLevel),
               cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
             },
@@ -712,7 +720,7 @@ function App() {
               odds: Math.max(1.01, newContestantOdds),
               accent: ["#ff4c69", "#3568ff", "#f2c114", "#25bf45"][current.contestants.length % 4],
               icon: newContestantEmoji,
-              strengthRating: clampRating(newContestantStrength),
+              strengthRating: clampRating(newContestantCpuLevel),
               cpuLevel: clampRating(newContestantCpuLevel),
               isCpu: newContestantIsCpu,
             },
@@ -721,7 +729,6 @@ function App() {
     }));
     setNewContestantName("");
     setNewContestantOdds(2.5);
-    setNewContestantStrength(7);
     setNewContestantCpuLevel(7);
     setNewContestantEmoji(emojiChoices[(room.contestants.length + 3) % emojiChoices.length]);
     showToast(t("勝負するプレイヤーを追加しました。", "Contestant added."));
@@ -773,24 +780,26 @@ function App() {
     setSelectedContestantId(next[0] ?? "");
   }
 
-  function handleContestantStrengthChange(
+  function handleContestantLevelChange(
     contestantId: string,
-    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean; icon: string }>,
+    patch: Partial<{ cpuLevel: number; isCpu: boolean; icon: string }>,
   ) {
     updateRoom((current) => {
       const contestants = current.contestants.map((contestant) =>
         contestant.id === contestantId
-          ? {
-              ...contestant,
-              ...patch,
-              strengthRating: clampRating(patch.strengthRating ?? contestant.strengthRating),
-              cpuLevel: clampRating(patch.cpuLevel ?? contestant.cpuLevel),
-            }
+          ? (() => {
+              const nextCpuLevel = clampRating(patch.cpuLevel ?? contestant.cpuLevel);
+              return {
+                ...contestant,
+                ...patch,
+                cpuLevel: nextCpuLevel,
+                strengthRating: nextCpuLevel,
+              };
+            })()
           : contestant,
       );
 
-      const shouldRecalculateOdds =
-        "strengthRating" in patch || "cpuLevel" in patch || "isCpu" in patch;
+      const shouldRecalculateOdds = "cpuLevel" in patch || "isCpu" in patch;
 
       return {
         ...current,
@@ -938,12 +947,13 @@ function App() {
               ))}
             </select>
             <button
-              className="icon-button"
+              className="pill-button guest-mode-button"
               type="button"
-              aria-label={t("ゲストモード", "Guest mode")}
+              aria-label={t("友だちとして参加", "Join as player")}
               onClick={() => setSession((current) => ({ ...current, role: "player", playerId: currentPlayer?.id }))}
             >
-              <Users size={20} />
+              <UserPlus size={18} />
+              <span>{t("参加", "Join")}</span>
             </button>
           </div>
         </header>
@@ -1050,8 +1060,6 @@ function App() {
                 setNewContestantName={setNewContestantName}
                 newContestantOdds={newContestantOdds}
                 setNewContestantOdds={setNewContestantOdds}
-                newContestantStrength={newContestantStrength}
-                setNewContestantStrength={setNewContestantStrength}
                 newContestantCpuLevel={newContestantCpuLevel}
                 setNewContestantCpuLevel={setNewContestantCpuLevel}
                 newContestantIsCpu={newContestantIsCpu}
@@ -1076,7 +1084,7 @@ function App() {
                 onRoomNameChange={handleRoomNameChange}
                 onStartingBalanceChange={handleStartingBalanceChange}
                 onPlayerEmojiChange={handlePlayerEmojiChange}
-                onContestantStrengthChange={handleContestantStrengthChange}
+                onContestantLevelChange={handleContestantLevelChange}
                 onSettingChange={handleSettingChange}
                 onAutoOdds={handleAutoOdds}
                 onGrantBonus={handleGrantBonus}
@@ -1693,8 +1701,6 @@ function HostView(props: {
   setNewContestantName: (value: string) => void;
   newContestantOdds: number;
   setNewContestantOdds: (value: number) => void;
-  newContestantStrength: number;
-  setNewContestantStrength: (value: number) => void;
   newContestantCpuLevel: number;
   setNewContestantCpuLevel: (value: number) => void;
   newContestantIsCpu: boolean;
@@ -1719,9 +1725,9 @@ function HostView(props: {
   onRoomNameChange: (name: string) => void;
   onStartingBalanceChange: (value: number) => void;
   onPlayerEmojiChange: (playerId: string, emoji: string) => void;
-  onContestantStrengthChange: (
+  onContestantLevelChange: (
     contestantId: string,
-    patch: Partial<{ strengthRating: number; cpuLevel: number; isCpu: boolean; icon: string }>,
+    patch: Partial<{ cpuLevel: number; isCpu: boolean; icon: string }>,
   ) => void;
   onSettingChange: (
     key: "maxPlayers" | "maxContestants" | "autoOdds" | "marketOdds" | "allowDebt" | "maxRaces" | "specialBonus",
@@ -1885,12 +1891,12 @@ function HostView(props: {
         </div>
         <button className="secondary-button full" type="button" onClick={props.onAutoOdds}>
           <Sparkles size={18} />
-          {props.t("強さ/CPU Lvから倍率更新", "Update odds from strength / CPU Lv")}
+          {props.t("CPU Lvから倍率更新", "Update odds from CPU Lv")}
         </button>
         <p className="host-note">
           {props.t(
-            "自動オッズは強さから初期勝率を作り、BET量変動をONにすると人気の馬券ほど倍率が下がります。",
-            "Auto odds estimate base win rates from power. Pool odds lower the multiplier for popular tickets.",
+            "自動オッズはCPU Lvから初期勝率を作ります。払戻はBET時に表示されていた倍率で計算します。",
+            "Auto odds estimate base win rates from CPU Lv. Payouts use the multiplier shown when the bet is placed.",
           )}
         </p>
       </section>
@@ -1974,7 +1980,7 @@ function HostView(props: {
           <Settings2 size={20} />
           <div>
             <h2>{props.t("オッズ設定", "Odds Settings")}</h2>
-            <p>{props.t("強さに合わせて自動、または倍率を手動調整", "Auto-adjust by power or edit odds manually")}</p>
+            <p>{props.t("CPU Lvに合わせて自動、または倍率を手動調整", "Auto-adjust by CPU Lv or edit odds manually")}</p>
           </div>
         </div>
         <p className="host-note compact-note">
@@ -1989,15 +1995,18 @@ function HostView(props: {
             onChange={(event) => props.setNewContestantName(event.target.value)}
             placeholder={props.t("対戦者名（空欄でCPU自動）", "Racer name (blank for CPU)")}
           />
-          <input
+          <select
             className="small-input"
-            type="number"
-            min="1"
-            max="9"
             value={props.newContestantCpuLevel}
             onChange={(event) => props.setNewContestantCpuLevel(Number(event.target.value))}
             aria-label={props.t("CPUレベル", "CPU level")}
-          />
+          >
+            {levelChoices.map((level) => (
+              <option value={level} key={level}>
+                Lv {level}
+              </option>
+            ))}
+          </select>
           <input
             className="odds-input"
             type="number"
@@ -2029,33 +2038,25 @@ function HostView(props: {
               <input
                 type="checkbox"
                 checked={contestant.isCpu}
-                onChange={(event) => props.onContestantStrengthChange(contestant.id, { isCpu: event.target.checked })}
+                onChange={(event) => props.onContestantLevelChange(contestant.id, { isCpu: event.target.checked })}
               />
               {props.t("CPU", "CPU")}
             </label>
             <label>
-              {props.t("強さ", "Power")}
-              <input
-                type="number"
-                min="1"
-                max="9"
-                value={contestant.strengthRating}
-                onChange={(event) =>
-                  props.onContestantStrengthChange(contestant.id, { strengthRating: Number(event.target.value) })
-                }
-              />
-            </label>
-            <label>
               Lv
-              <input
-                type="number"
-                min="1"
-                max="9"
+              <select
                 value={contestant.cpuLevel}
                 onChange={(event) =>
-                  props.onContestantStrengthChange(contestant.id, { cpuLevel: Number(event.target.value) })
+                  props.onContestantLevelChange(contestant.id, { cpuLevel: Number(event.target.value) })
                 }
-              />
+                aria-label={props.t("CPUレベル", "CPU level")}
+              >
+                {levelChoices.map((level) => (
+                  <option value={level} key={level}>
+                    Lv {level}
+                  </option>
+                ))}
+              </select>
             </label>
             <input
               type="number"
@@ -2066,7 +2067,7 @@ function HostView(props: {
             />
             <EmojiPicker
               value={contestant.icon}
-              onChange={(emoji) => props.onContestantStrengthChange(contestant.id, { icon: emoji })}
+              onChange={(emoji) => props.onContestantLevelChange(contestant.id, { icon: emoji })}
               label={props.t(`${contestant.name}のアイコン`, `${contestant.name}'s icon`)}
               compact
             />

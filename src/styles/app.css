@@ -345,7 +345,7 @@ h2 {
 
 .top-actions {
   display: grid;
-  grid-template-columns: minmax(68px, 0.7fr) minmax(128px, 1fr) 46px;
+  grid-template-columns: minmax(68px, 0.7fr) minmax(118px, 1fr) minmax(74px, 0.72fr);
   gap: 8px;
 }
 
@@ -386,6 +386,19 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 16px;
+}
+
+.guest-mode-button {
+  justify-content: center;
+  min-width: 0;
+  padding: 0 10px;
+  font-weight: 900;
+}
+
+.guest-mode-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-strip {
@@ -1801,20 +1814,21 @@ select option {
   grid-template-columns: repeat(3, 1fr);
   align-items: end;
   gap: 8px;
+  padding-top: 2px;
   margin-bottom: 10px;
 }
 
 .podium-card {
   position: relative;
   min-height: 0;
-  height: 166px;
+  height: 144px;
   min-width: 0;
   align-self: end;
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: 3px;
   align-content: end;
-  padding: 34px 7px 12px;
+  padding: 34px 6px 13px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.07);
@@ -1831,27 +1845,27 @@ select option {
 }
 
 .podium-card.rank-1 {
-  height: 182px;
+  height: 156px;
   border-color: rgba(255, 217, 92, 0.68);
   box-shadow: 0 14px 34px rgba(255, 207, 91, 0.16);
 }
 
 .podium-card.rank-2 {
-  height: 172px;
+  height: 148px;
   border-color: rgba(202, 213, 226, 0.58);
 }
 
 .podium-card.rank-3 {
-  height: 162px;
+  height: 144px;
   border-color: rgba(223, 142, 91, 0.58);
 }
 
 .podium-rank {
   position: absolute;
-  top: 8px;
+  top: 7px;
   left: 50%;
-  width: 38px;
-  height: 28px;
+  width: 34px;
+  height: 26px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -1859,7 +1873,7 @@ select option {
   color: #3a2600;
   background: linear-gradient(135deg, #ffe986, #c99222);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 1000;
 }
 
@@ -1878,9 +1892,9 @@ select option {
 }
 
 .podium-card .avatar {
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
+  width: 46px;
+  height: 46px;
+  font-size: 19px;
 }
 
 .podium-card strong,
@@ -1889,11 +1903,11 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.12;
+  line-height: 1.18;
 }
 
 .podium-card strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .podium-card span {
@@ -1903,7 +1917,8 @@ select option {
 
 .podium-card b {
   color: var(--warn);
-  font-size: 15px;
+  font-size: 14px;
+  min-height: 17px;
 }
 
 .result-summary.full {
@@ -2183,7 +2198,7 @@ select option {
   }
 
   .top-actions {
-    grid-template-columns: auto 152px 46px;
+    grid-template-columns: auto 152px auto;
   }
 
   .bottom-nav {

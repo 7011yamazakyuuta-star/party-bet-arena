@@ -28,7 +28,7 @@ export const createInitialRoom = (): Room => ({
     maxPlayers: 8,
     maxContestants: 8,
     autoOdds: true,
-    marketOdds: true,
+    marketOdds: false,
     allowDebt: true,
     maxRaces: 15,
     specialBonus: 10,

@@ -41,6 +41,7 @@ export type Bet = {
   contestantIds: string[];
   type: BetType;
   amount: number;
+  multiplier?: number;
   placedBy: "self" | "host";
   createdAt: number;
 };
@@ -96,5 +97,6 @@ export type DraftBet = {
   contestantIds: string[];
   type: BetType;
   amount: number;
+  multiplier: number;
   placedBy: "self" | "host";
 };
