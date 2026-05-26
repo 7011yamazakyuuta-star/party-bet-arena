@@ -1585,6 +1585,14 @@ function BetView(props: {
         </section>
       )}
 
+      <section className="payout-preview">
+        <div>
+          <Sparkles size={24} />
+          <span>{props.t("的中時の獲得見込み", "Estimated win")}</span>
+        </div>
+        <strong>{currency.format(props.potentialPayout)} {props.t("コイン", "coins")}</strong>
+      </section>
+
       <section className="amount-panel">
         <div className="amount-header">
           <span>{props.t("ベット額", "Bet amount")}</span>
@@ -1631,14 +1639,6 @@ function BetView(props: {
             {props.t("所持分", "Balance")}
           </button>
         </div>
-      </section>
-
-      <section className="payout-preview">
-        <div>
-          <Sparkles size={24} />
-          <span>{props.t("的中時の獲得見込み", "Estimated win")}</span>
-        </div>
-        <strong>{currency.format(props.potentialPayout)} {props.t("コイン", "coins")}</strong>
       </section>
 
       <button className="primary-button sticky-action" type="button" onClick={props.onPlaceBet}>

@@ -1193,16 +1193,20 @@ select option {
 }
 
 .payout-preview {
-  display: flex;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  padding: 14px 16px;
   border-color: rgba(255, 207, 91, 0.32);
 }
 
 .payout-preview div {
-  display: grid;
-  gap: 6px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .payout-preview svg,
@@ -1210,9 +1214,15 @@ select option {
   color: var(--warn);
 }
 
+.payout-preview span {
+  line-height: 1.35;
+}
+
 .payout-preview strong {
-  font-size: 24px;
+  font-size: clamp(20px, 5vw, 26px);
+  line-height: 1.1;
   text-align: right;
+  white-space: nowrap;
 }
 
 .sticky-action {
@@ -2370,6 +2380,7 @@ select option {
   .host-nav-panel,
   .leader-preview.full,
   .result-summary,
+  .payout-preview,
   .sticky-action {
     grid-column: 1 / -1;
   }
@@ -2450,6 +2461,15 @@ select option {
 
   .quick-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .payout-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .payout-preview strong {
+    text-align: left;
+    white-space: normal;
   }
 
   .inline-form,
