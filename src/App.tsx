@@ -125,7 +125,7 @@ function getBetTypeCopy(t: Translate): Record<BetType, { title: string; note: st
 }
 
 const quickAmounts = [10, 50, 100, 500, 1000, 5000];
-const levelChoices = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const levelChoices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 const languageOptions: Array<{ value: LanguageName; label: string; short: string }> = [
   { value: "ja", label: "日本語", short: "JP" },
   { value: "en", label: "English", short: "EN" },
@@ -2060,7 +2060,7 @@ function HostView(props: {
           <Settings2 size={20} />
           <div>
             <h2>{props.t("オッズ設定", "Odds Settings")}</h2>
-            <p>{props.t("CPU Lvに合わせて自動、または倍率を手動調整", "Auto-adjust by CPU Lv or edit odds manually")}</p>
+            <p>{props.t("CPU Lv 1〜11に合わせて自動、または倍率を手動調整", "Auto-adjust by CPU Lv 1-11 or edit odds manually")}</p>
           </div>
         </div>
         <p className="host-note compact-note">
@@ -2091,7 +2091,7 @@ function HostView(props: {
             className="odds-input"
             type="number"
             min="1.01"
-            step="0.1"
+            step="0.01"
             value={props.newContestantOdds}
             onChange={(event) => props.setNewContestantOdds(Number(event.target.value))}
           />
@@ -2141,7 +2141,7 @@ function HostView(props: {
             <input
               type="number"
               min="1.01"
-              step="0.1"
+              step="0.01"
               value={contestant.odds}
               onChange={(event) => props.onOddsChange(contestant.id, Number(event.target.value))}
             />

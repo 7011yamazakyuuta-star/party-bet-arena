@@ -1226,8 +1226,7 @@ select option {
 }
 
 .sticky-action {
-  position: sticky;
-  bottom: 92px;
+  position: static;
 }
 
 .room-name-field {

@@ -2,7 +2,7 @@ import type { Bet, BetType, Contestant, DraftBet, Player, RacePayout, Room } fro
 
 export const currency = new Intl.NumberFormat("ja-JP");
 export const maxParticipantLimit = 8;
-export const maxRating = 9;
+export const maxRating = 11;
 export const maxRaceLimit = 15;
 
 export function getContestant(room: Room, contestantId: string) {
@@ -25,7 +25,7 @@ export function getBetPickIds(bet: Pick<Bet, "contestantId"> & Partial<Pick<Bet,
 
 export function calculateAutoOdds(contestants: Contestant[]) {
   const weights = contestants.map((contestant) => {
-    const normalizedRating = Math.max(1, Math.min(9, contestant.cpuLevel || 5));
+    const normalizedRating = Math.max(1, Math.min(maxRating, contestant.cpuLevel || 5));
     return Math.exp((normalizedRating - 5) * 0.36);
   });
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
@@ -34,9 +34,9 @@ export function calculateAutoOdds(contestants: Contestant[]) {
   return contestants.map((contestant, index) => {
     const winProbability = weights[index] / totalWeight;
     const fairOdds = 1 / Math.max(0.001, winProbability);
-    const playableOdds = 1 + (fairOdds - 1) * 0.72;
-    const odds = Math.max(1.1, Math.min(maxOdds, Number(playableOdds.toFixed(1))));
-    return { ...contestant, odds, strengthRating: Math.max(1, Math.min(9, contestant.cpuLevel || 5)) };
+    const playableOdds = 1 + (fairOdds - 1) * 0.32;
+    const odds = Math.max(1.05, Math.min(maxOdds, Number(playableOdds.toFixed(2))));
+    return { ...contestant, odds, strengthRating: Math.max(1, Math.min(maxRating, contestant.cpuLevel || 5)) };
   });
 }
 
