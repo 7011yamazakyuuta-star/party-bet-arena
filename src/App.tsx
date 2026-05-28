@@ -2069,7 +2069,7 @@ function HostView(props: {
             `${props.room.contestants.length}/${props.room.settings.maxContestants} racers. Leave the name blank to auto-create a CPU name.`,
           )}
         </p>
-        <div className="inline-form">
+        <div className="inline-form contestant-form">
           <input
             value={props.newContestantName}
             onChange={(event) => props.setNewContestantName(event.target.value)}
@@ -2103,8 +2103,9 @@ function HostView(props: {
             />
             {props.t("CPU", "CPU")}
           </label>
-          <button type="button" onClick={props.onAddContestant} aria-label={props.t("対戦者を追加", "Add contestant")}>
+          <button className="add-button" type="button" onClick={props.onAddContestant} aria-label={props.t("対戦者を追加", "Add contestant")}>
             <Plus size={18} />
+            {props.t("追加", "Add")}
           </button>
         </div>
         <EmojiPicker value={props.newContestantEmoji} onChange={props.setNewContestantEmoji} label={props.t("追加する対戦者のアイコン", "Icon for the new contestant")} />
