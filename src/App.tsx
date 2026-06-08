@@ -67,7 +67,7 @@ import {
   saveSession,
 } from "./lib/storage";
 import type { LocalRoomSummary } from "./lib/storage";
-import type { BetType, DraftBet, LanguageName, Player, Room, ThemeName } from "./lib/types";
+import type { BetType, DraftBet, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./lib/types";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
@@ -656,7 +656,7 @@ function App() {
       return;
     }
     let firebaseUid: string | undefined;
-    if (session.role === "player" && isFirebaseConfigured && !room.isDemo) {
+    if (isFirebaseConfigured && !room.isDemo) {
       try {
         firebaseUid = await getFirebaseUid();
       } catch (firebaseError) {
@@ -677,7 +677,7 @@ function App() {
       updatedAt: Date.now(),
     };
 
-    if (session.role === "player" && isFirebaseConfigured && !room.isDemo) {
+    if (isFirebaseConfigured && !room.isDemo) {
       commitRoom(next, false);
       try {
         await saveFirebaseBet(room.id, bet);
@@ -1168,6 +1168,7 @@ function App() {
                 ranking={ranking}
                 displayMode={resultDisplayMode}
                 setDisplayMode={setResultDisplayMode}
+                betTypeLabels={betTypeLabels}
                 t={t}
               />
             )}
@@ -2264,9 +2265,21 @@ function RankingView(props: {
   ranking: Player[];
   displayMode: ResultDisplayMode;
   setDisplayMode: (value: ResultDisplayMode) => void;
+  betTypeLabels: Record<BetType, { title: string; note: string }>;
   t: Translate;
 }) {
   const latestHistory = props.room.raceHistory.at(-1);
+  const historyContestants = latestHistory?.contestants?.length ? latestHistory.contestants : props.room.contestants;
+  const betResultRows = latestHistory?.bets ?? [];
+  const getHistoryContestant = (contestantId: string) =>
+    historyContestants.find((contestant) => contestant.id === contestantId) ?? getContestant(props.room, contestantId);
+  const formatBetPick = (bet: RaceBetResult) =>
+    bet.contestantIds
+      .map((contestantId, index) => {
+        const contestant = getHistoryContestant(contestantId);
+        return `${index + 1}.${contestant ? contestant.name : "Unknown"}`;
+      })
+      .join(" → ");
   const podiumPlayers = [
     props.ranking[1] ? { player: props.ranking[1], rank: 2 } : undefined,
     props.ranking[0] ? { player: props.ranking[0], rank: 1 } : undefined,
@@ -2327,11 +2340,12 @@ function RankingView(props: {
             <>
               <div className="result-order-strip">
                 {latestHistory.resultIds.map((id, index) => {
-                  const contestant = getContestant(props.room, id);
+                  const contestant = getHistoryContestant(id);
                   return (
                     <span key={id}>
                       <b>{index + 1}</b>
-                      {contestant ? `${contestant.icon} ${contestant.name}` : "Unknown"}
+                      <strong>{contestant ? `${contestant.icon} ${contestant.name}` : "Unknown"}</strong>
+                      <em>{contestant ? `${contestant.odds.toFixed(2)}x` : "-"}</em>
                     </span>
                   );
                 })}
@@ -2354,6 +2368,47 @@ function RankingView(props: {
                     </div>
                   );
                 })}
+              </div>
+              <div className="bet-result-table">
+                <div className="bet-result-title">
+                  <strong>{props.t("投票結果", "Bet results")}</strong>
+                  <span>{props.t("誰がどれに賭けて、どれが的中したか", "Who bet what and which tickets hit")}</span>
+                </div>
+                {betResultRows.length === 0 ? (
+                  <p className="muted">{props.t("このレースの投票はありません。", "No bets in this race.")}</p>
+                ) : (
+                  <>
+                    <div className="bet-result-head">
+                      <span>{props.t("参加者", "Bettor")}</span>
+                      <span>{props.t("買い目", "Pick")}</span>
+                      <span>{props.t("倍率", "Odds")}</span>
+                      <span>{props.t("結果", "Result")}</span>
+                    </div>
+                    {betResultRows.map((bet) => {
+                      const player = props.room.players.find((item) => item.id === bet.playerId);
+                      return (
+                        <div className={bet.hit ? "bet-result-row hit" : "bet-result-row miss"} key={bet.id}>
+                          <span className="bet-result-player">
+                            {player ? `${player.emoji} ${player.name}` : "Unknown"}
+                            <small>{bet.placedBy === "host" ? props.t("代行", "Proxy") : props.t("本人", "Self")}</small>
+                          </span>
+                          <strong>
+                            {props.betTypeLabels[bet.type].title}
+                            <small>{formatBetPick(bet)}</small>
+                          </strong>
+                          <span>{bet.multiplier.toFixed(2)}x</span>
+                          <b>
+                            {bet.hit ? props.t("的中", "Hit") : props.t("外れ", "Miss")}
+                            <small>
+                              {bet.delta >= 0 ? "+" : ""}
+                              {currency.format(bet.delta)}
+                            </small>
+                          </b>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
               <div className="race-ledger">
                 <div className="race-ledger-head">

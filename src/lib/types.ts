@@ -68,11 +68,37 @@ export type RacePayout = {
   hits: number;
 };
 
+export type RaceContestantSnapshot = {
+  id: string;
+  name: string;
+  odds: number;
+  accent: string;
+  icon: string;
+  cpuLevel: number;
+  isCpu: boolean;
+};
+
+export type RaceBetResult = {
+  id: string;
+  playerId: string;
+  contestantIds: string[];
+  type: BetType;
+  amount: number;
+  multiplier: number;
+  payout: number;
+  delta: number;
+  hit: boolean;
+  placedBy: "self" | "host";
+  createdAt: number;
+};
+
 export type RaceHistoryEntry = {
   raceId: string;
   raceTitle: string;
   settledAt: number;
   resultIds: string[];
+  contestants?: RaceContestantSnapshot[];
+  bets?: RaceBetResult[];
   payouts: RacePayout[];
 };
 

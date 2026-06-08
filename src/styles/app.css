@@ -2057,6 +2057,8 @@ select option {
 .result-order-strip span,
 .payout-head,
 .payout-row,
+.bet-result-head,
+.bet-result-row,
 .race-ledger-head,
 .race-ledger-row {
   display: grid;
@@ -2068,16 +2070,32 @@ select option {
 }
 
 .result-order-strip span {
-  grid-template-columns: 30px 1fr;
+  grid-template-columns: 30px minmax(0, 1fr) 62px;
   min-height: 42px;
   padding: 6px 9px;
+}
+
+.result-order-strip strong,
+.result-order-strip em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .result-order-strip b {
   color: var(--warn);
 }
 
+.result-order-strip em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 1000;
+  text-align: right;
+}
+
 .payout-table,
+.bet-result-table,
 .race-ledger {
   display: grid;
   gap: 5px;
@@ -2141,6 +2159,97 @@ select option {
 .payout-row b {
   font-size: 18px;
   font-weight: 1000;
+}
+
+.bet-result-table {
+  margin-top: 14px;
+}
+
+.bet-result-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.bet-result-title strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.bet-result-title span {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.bet-result-head,
+.bet-result-row {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) 56px 70px;
+  min-height: 44px;
+  padding: 7px 9px;
+}
+
+.bet-result-head {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.bet-result-row {
+  font-size: 12px;
+}
+
+.bet-result-player,
+.bet-result-row strong,
+.bet-result-row span,
+.bet-result-row b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bet-result-player,
+.bet-result-row strong,
+.bet-result-row b {
+  display: grid;
+  gap: 2px;
+}
+
+.bet-result-player,
+.bet-result-row strong {
+  white-space: nowrap;
+}
+
+.bet-result-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.bet-result-row > span:nth-child(3),
+.bet-result-head span:nth-child(3),
+.bet-result-row b,
+.bet-result-head span:nth-child(4) {
+  text-align: right;
+}
+
+.bet-result-row.hit {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.bet-result-row.hit b {
+  color: var(--accent);
+}
+
+.bet-result-row.miss b {
+  color: var(--danger);
 }
 
 .race-ledger {

@@ -1,5 +1,5 @@
 import { createInitialRoom } from "./sample";
-import type { AppRole, LanguageName, Player, Room, ThemeName } from "./types";
+import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
@@ -211,6 +211,16 @@ export function normalizeRoom(room: Room): Room {
     raceHistory: (room.raceHistory ?? []).map((entry) => ({
       ...entry,
       resultIds: entry.resultIds ?? [],
+      contestants: entry.contestants ?? [],
+      bets: (entry.bets ?? []).map((bet: RaceBetResult) => ({
+        ...bet,
+        contestantIds: bet.contestantIds?.length ? bet.contestantIds : [],
+        amount: bet.amount ?? 0,
+        multiplier: bet.multiplier ?? 0,
+        payout: bet.payout ?? 0,
+        delta: bet.delta ?? 0,
+        hit: Boolean(bet.hit),
+      })),
       payouts: (entry.payouts ?? []).map((payout) => ({
         ...payout,
         stake: payout.stake ?? 0,

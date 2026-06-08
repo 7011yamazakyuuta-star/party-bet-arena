@@ -1,4 +1,4 @@
-import type { Bet, BetType, Contestant, DraftBet, Player, RacePayout, Room } from "./types";
+import type { Bet, BetType, Contestant, DraftBet, Player, RaceBetResult, RacePayout, Room } from "./types";
 
 export const currency = new Intl.NumberFormat("ja-JP");
 export const maxParticipantLimit = 8;
@@ -40,14 +40,60 @@ export function calculateAutoOdds(contestants: Contestant[]) {
   });
 }
 
-export function placeMultiplier(type: BetType, contestants: Contestant[]) {
+function contestantWeight(contestant: Contestant) {
+  return 1 / Math.max(1.05, contestant.odds);
+}
+
+function orderedProbability(order: Contestant[], fieldContestants: Contestant[]) {
+  if (!order.length) return 0;
+  const fieldIds = new Set(fieldContestants.map((contestant) => contestant.id));
+  const selected = order.filter((contestant) => fieldIds.has(contestant.id));
+  if (selected.length !== order.length) return 0;
+
+  let remainingWeight = fieldContestants.reduce((sum, contestant) => sum + contestantWeight(contestant), 0);
+  let probability = 1;
+
+  for (const contestant of selected) {
+    const weight = contestantWeight(contestant);
+    if (remainingWeight <= 0 || weight <= 0) return 0;
+    probability *= weight / remainingWeight;
+    remainingWeight -= weight;
+  }
+
+  return probability;
+}
+
+function permutations<T>(items: T[]): T[][] {
+  if (items.length <= 1) return [items];
+  return items.flatMap((item, index) =>
+    permutations(items.filter((_, itemIndex) => itemIndex !== index)).map((rest) => [item, ...rest]),
+  );
+}
+
+function orderAdjustment(order: Contestant[], fieldContestants: Contestant[]) {
+  if (order.length < 2) return 1;
+  const currentProbability = orderedProbability(order, fieldContestants);
+  if (!currentProbability) return 1;
+
+  const possibleOrders = permutations(order);
+  const averageProbability =
+    possibleOrders.reduce((sum, permutation) => sum + orderedProbability(permutation, fieldContestants), 0) /
+    Math.max(1, possibleOrders.length);
+
+  if (!averageProbability) return 1;
+  return Math.max(0.58, Math.min(1.85, Math.pow(averageProbability / currentProbability, 0.85)));
+}
+
+export function placeMultiplier(type: BetType, contestants: Contestant[], fieldContestants: Contestant[] = contestants) {
   if (!contestants.length) return 0;
   const oddsProduct = contestants.reduce((product, contestant) => product * contestant.odds, 1);
 
   if (type === "win") return contestants[0].odds;
   if (type === "place") return Math.max(1.1, Number((contestants[0].odds * 0.52).toFixed(2)));
-  if (type === "exacta") return Math.max(1.3, Number((oddsProduct * 0.72).toFixed(2)));
-  return Math.max(1.6, Number((oddsProduct * 0.88).toFixed(2)));
+  if (type === "exacta") {
+    return Math.max(1.3, Number((oddsProduct * 0.72 * orderAdjustment(contestants, fieldContestants)).toFixed(2)));
+  }
+  return Math.max(1.6, Number((oddsProduct * 0.88 * orderAdjustment(contestants, fieldContestants)).toFixed(2)));
 }
 
 function getOutcomeKey(type: BetType, contestantIds: string[]) {
@@ -61,7 +107,7 @@ function clampMultiplier(type: BetType, multiplier: number) {
 }
 
 export function getEffectiveMultiplier(room: Room, type: BetType, contestants: Contestant[]) {
-  const baseMultiplier = placeMultiplier(type, contestants);
+  const baseMultiplier = placeMultiplier(type, contestants, room.contestants);
   if (!baseMultiplier || !room.settings.marketOdds) return baseMultiplier;
 
   const targetIds = contestants.map((contestant) => contestant.id);
@@ -156,6 +202,16 @@ export function createBet(draft: DraftBet): Bet {
 export function settleRoom(room: Room, resultIds: string[]) {
   const settledAt = Date.now();
   const payoutRows = new Map<string, RacePayout>();
+  const betResults: RaceBetResult[] = [];
+  const contestantSnapshots = room.contestants.map((contestant) => ({
+    id: contestant.id,
+    name: contestant.name,
+    odds: contestant.odds,
+    accent: contestant.accent,
+    icon: contestant.icon,
+    cpuLevel: contestant.cpuLevel,
+    isCpu: contestant.isCpu,
+  }));
 
   const nextPlayers = room.players.map((player) => {
     const summary: RacePayout = {
@@ -168,14 +224,44 @@ export function settleRoom(room: Room, resultIds: string[]) {
     };
     const playerBets = room.currentRace.bets.filter((bet) => bet.playerId === player.id);
     const balance = playerBets.reduce((current, bet) => {
+      const pickIds = getBetPickIds(bet);
       const contestants = getBetPickIds(bet)
         .map((contestantId) => getContestant(room, contestantId))
         .filter((contestant): contestant is Contestant => Boolean(contestant));
-      if (contestants.length !== requiredPickCount(bet.type)) return current;
+      if (contestants.length !== requiredPickCount(bet.type)) {
+        betResults.push({
+          id: bet.id,
+          playerId: bet.playerId,
+          contestantIds: pickIds,
+          type: bet.type,
+          amount: bet.amount,
+          multiplier: bet.multiplier ?? 0,
+          payout: 0,
+          delta: 0,
+          hit: false,
+          placedBy: bet.placedBy,
+          createdAt: bet.createdAt,
+        });
+        return current;
+      }
       const afterStake = current - bet.amount;
       summary.stake += bet.amount;
+      const hit = isBetHit(bet.type, pickIds, resultIds);
 
-      if (!isBetHit(bet.type, getBetPickIds(bet), resultIds)) {
+      if (!hit) {
+        betResults.push({
+          id: bet.id,
+          playerId: bet.playerId,
+          contestantIds: pickIds,
+          type: bet.type,
+          amount: bet.amount,
+          multiplier: bet.multiplier ?? getEffectiveMultiplier(room, bet.type, contestants),
+          payout: 0,
+          delta: -bet.amount,
+          hit: false,
+          placedBy: bet.placedBy,
+          createdAt: bet.createdAt,
+        });
         return room.settings.allowDebt ? afterStake : Math.max(0, afterStake);
       }
 
@@ -184,6 +270,19 @@ export function settleRoom(room: Room, resultIds: string[]) {
       summary.payout += payout;
       summary.hits += 1;
       const afterPayout = afterStake + payout;
+      betResults.push({
+        id: bet.id,
+        playerId: bet.playerId,
+        contestantIds: pickIds,
+        type: bet.type,
+        amount: bet.amount,
+        multiplier,
+        payout,
+        delta: payout - bet.amount,
+        hit: true,
+        placedBy: bet.placedBy,
+        createdAt: bet.createdAt,
+      });
       return room.settings.allowDebt ? afterPayout : Math.max(0, afterPayout);
     }, player.balance);
 
@@ -199,6 +298,8 @@ export function settleRoom(room: Room, resultIds: string[]) {
     raceTitle: room.currentRace.title,
     settledAt,
     resultIds,
+    contestants: contestantSnapshots,
+    bets: betResults.sort((a, b) => a.createdAt - b.createdAt),
     payouts: room.players.map((player) => payoutRows.get(player.id)).filter((row): row is RacePayout => Boolean(row)),
   };
   const raceHistory = [
