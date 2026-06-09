@@ -1,5 +1,5 @@
 import { createInitialRoom } from "./sample";
-import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./types";
+import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName, UiModeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
@@ -24,6 +24,7 @@ export type LocalRoomSummary = {
 };
 
 const validThemes = new Set<ThemeName>(["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
+const validUiModes = new Set<UiModeName>(["smart", "classic"]);
 const fallbackEmojis = ["🎮", "😎", "🌟", "🚗", "🎲", "🔥", "🍀", "🏆"];
 const fallbackContestantIcons = ["👑", "🤖", "⚡", "🍀", "🚀", "🎯", "💎", "⭐"];
 const legacyContestantIcons: Record<string, string> = {
@@ -173,6 +174,7 @@ export function normalizeRoom(room: Room): Room {
     ...room,
     isDemo: room.isDemo ?? room.id === "DEMO42",
     theme: validThemes.has(room.theme) ? room.theme : fallback.theme,
+    uiMode: validUiModes.has((room as Partial<Room>).uiMode as UiModeName) ? ((room as Partial<Room>).uiMode as UiModeName) : fallback.uiMode,
     settings: {
       ...fallback.settings,
       ...room.settings,

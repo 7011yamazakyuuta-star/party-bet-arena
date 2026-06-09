@@ -67,7 +67,7 @@ import {
   saveSession,
 } from "./lib/storage";
 import type { LocalRoomSummary } from "./lib/storage";
-import type { BetType, DraftBet, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./lib/types";
+import type { BetType, DraftBet, LanguageName, Player, RaceBetResult, Room, ThemeName, UiModeName } from "./lib/types";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
@@ -76,6 +76,7 @@ type ResultDisplayMode = "ranking" | "payouts";
 type HostSection = "progress" | "settings" | "players" | "contestants";
 
 const themeOrder: ThemeName[] = ["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"];
+const uiModeOrder: UiModeName[] = ["smart", "classic"];
 const emojiChoices = [
   "😀",
   "😎",
@@ -113,6 +114,21 @@ function getThemeCopy(t: Translate): Record<ThemeName, { label: string; note: st
     neon: { label: t("ネオン", "Neon"), note: t("暗めでゲーミング感", "Dark gaming glow") },
     pop: { label: t("ポップ", "Pop"), note: t("濃いめのイベント感", "Vivid event mood") },
     minimal: { label: t("ミニマル", "Minimal"), note: t("控えめで読みやすい", "Quiet and readable") },
+  };
+}
+
+function getUiModeCopy(t: Translate): Record<UiModeName, { label: string; note: string; tag: string }> {
+  return {
+    smart: {
+      label: t("スマートUI", "Smart UI"),
+      note: t("次にやることを先に出す、初見向けの整理表示", "Guided layout that surfaces the next action first"),
+      tag: t("おすすめ", "Recommended"),
+    },
+    classic: {
+      label: t("クラシックUI", "Classic UI"),
+      note: t("これまでの画面構成に戻す表示", "Keeps the previous screen structure"),
+      tag: t("従来", "Original"),
+    },
   };
 }
 
@@ -341,10 +357,15 @@ function App() {
   const t: Translate = (ja, en) => translateText(language, ja, en);
   const betTypeLabels = useMemo(() => getBetTypeCopy(t), [language]);
   const themeCopy = useMemo(() => getThemeCopy(t), [language]);
+  const uiModeCopy = useMemo(() => getUiModeCopy(t), [language]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = room.theme;
   }, [room.theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.uiMode = room.uiMode;
+  }, [room.uiMode]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -818,6 +839,10 @@ function App() {
     updateRoom((current) => ({ ...current, theme, updatedAt: Date.now() }));
   }
 
+  function handleUiModeChange(uiMode: UiModeName) {
+    updateRoom((current) => ({ ...current, uiMode, updatedAt: Date.now() }));
+  }
+
   function handleLanguageChange(nextLanguage: LanguageName) {
     setSession((current) => ({ ...current, language: nextLanguage }));
   }
@@ -1141,6 +1166,7 @@ function App() {
                 setBonusAmount={setBonusAmount}
                 resultIds={resultIds}
                 themeCopy={themeCopy}
+                uiModeCopy={uiModeCopy}
                 betTypeLabels={betTypeLabels}
                 elapsedTime={elapsedTime}
                 currentRaceNumber={currentRaceNumber}
@@ -1150,6 +1176,7 @@ function App() {
                 onAddContestant={handleAddContestant}
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
+                onUiModeChange={handleUiModeChange}
                 onRoomNameChange={handleRoomNameChange}
                 onStartingBalanceChange={handleStartingBalanceChange}
                 onPlayerEmojiChange={handlePlayerEmojiChange}
@@ -1457,6 +1484,33 @@ function BetView(props: {
     : props.room.currentRace.status === "closed"
       ? props.t("受付終了", "Closed")
       : props.t("受付中", "Open");
+  const isPickComplete = selectedContestants.length === pickCount;
+  const smartActionTitle = props.room.currentRace.status !== "betting"
+    ? props.t("この勝負は受付中ではありません", "This round is not accepting bets")
+    : !props.activePlayer
+      ? props.t("ベットする参加者を選ぶ", "Choose the bettor")
+      : !isPickComplete
+        ? props.t("買い目を選ぶ", "Choose your picks")
+        : props.amount <= 0
+          ? props.t("ベット額を決める", "Set the bet amount")
+          : props.t("この内容でベットできます", "Ready to place this bet");
+  const smartActionNote = props.room.currentRace.status !== "betting"
+    ? props.t("払戻済みの場合は、管理画面から次の勝負へ進みます。", "If payouts are done, continue from the host controls.")
+    : !props.activePlayer
+      ? props.t("幹事入力なら、まず代行する参加者を選びます。", "For host entry, select who this bet is for first.")
+      : !isPickComplete
+        ? props.t(`${pickCount}つの順位枠を埋めると、見込み払戻が確定します。`, `Fill ${pickCount} pick slots to lock the estimated payout.`)
+        : props.t(
+            `${selectedContestants.map((contestant, index) => `${index + 1}.${contestant.name}`).join(" → ")} / ${currency.format(props.amount)}コイン`,
+            `${selectedContestants.map((contestant, index) => `${index + 1}. ${contestant.name}`).join(" -> ")} / ${currency.format(props.amount)} coins`,
+          );
+  const smartMeterNote = props.room.currentRace.status !== "betting"
+    ? props.t("停止中", "Closed")
+    : !props.activePlayer
+      ? props.t("参加者未選択", "No bettor")
+      : isPickComplete && props.amount > 0
+        ? `${props.potentialPayout.toLocaleString()} ${props.t("見込み", "est.")}`
+        : props.t("未完了", "Open");
 
   return (
     <div className="screen-stack">
@@ -1506,6 +1560,19 @@ function BetView(props: {
         <div>
           <span>{props.room.settings.allowDebt ? props.t("現在コイン", "Balance") : props.t("残コイン", "Available")}</span>
           <strong>{currency.format(shownBalance)}</strong>
+        </div>
+      </section>
+
+      <section className="smart-action-card" aria-label={props.t("次にやること", "Next action")}>
+        <div>
+          <span>{props.t("次にやること", "Next action")}</span>
+          <strong>{smartActionTitle}</strong>
+          <p>{smartActionNote}</p>
+        </div>
+        <div className="smart-action-meter">
+          <span>{props.t("選択", "Picks")}</span>
+          <strong>{selectedContestants.length}/{pickCount}</strong>
+          <em>{smartMeterNote}</em>
         </div>
       </section>
 
@@ -1789,6 +1856,7 @@ function HostView(props: {
   setBonusAmount: (value: number) => void;
   resultIds: string[];
   themeCopy: Record<ThemeName, { label: string; note: string }>;
+  uiModeCopy: Record<UiModeName, { label: string; note: string; tag: string }>;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
   elapsedTime: string;
   currentRaceNumber: number;
@@ -1798,6 +1866,7 @@ function HostView(props: {
   onAddContestant: () => void;
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
+  onUiModeChange: (uiMode: UiModeName) => void;
   onRoomNameChange: (name: string) => void;
   onStartingBalanceChange: (value: number) => void;
   onPlayerEmojiChange: (playerId: string, emoji: string) => void;
@@ -1823,9 +1892,44 @@ function HostView(props: {
     { key: "contestants", label: props.t("対戦者", "Racers"), note: props.t("CPU・倍率", "CPU and odds"), icon: <Gamepad2 size={18} /> },
   ];
   const hostSectionClass = (section: HostSection) => `host-panel ${hostSection === section ? "" : "host-hidden"}`;
+  const resultProgress = `${props.resultIds.length}/${props.room.contestants.length}`;
+  const hostNextTitle = props.room.currentRace.status === "settled"
+    ? props.currentRaceNumber >= props.room.settings.maxRaces
+      ? props.t("最終ランキングを確認", "Check final ranking")
+      : props.t("次の勝負へ進む", "Start the next round")
+    : props.resultIds.length < props.room.contestants.length
+      ? props.t(`第${props.currentRaceNumber}レースの順位を入れる`, `Enter Race ${props.currentRaceNumber} results`)
+      : props.t("払戻を反映する", "Apply payouts");
+  const hostNextNote = props.room.currentRace.status === "settled"
+    ? props.t("この勝負の払戻は反映済みです。続けるなら次の勝負へ進みます。", "Payouts are applied. Continue when you are ready.")
+    : props.resultIds.length < props.room.contestants.length
+      ? props.t("順位をタップした順に1位から入ります。全員分そろうと払戻できます。", "Tap racers in finish order. Once all are set, payouts can be applied.")
+      : props.t("順位入力は完了しています。下のボタンでこの勝負の収支を確定します。", "Results are complete. Use the button below to settle this round.");
 
   return (
     <div className="screen-stack host-stack">
+      <section className="host-next-card">
+        <div className="host-next-copy">
+          <span>{props.t("今やること", "Next up")}</span>
+          <strong>{hostNextTitle}</strong>
+          <p>{hostNextNote}</p>
+        </div>
+        <div className="host-next-metrics">
+          <div>
+            <span>{props.t("レース", "Race")}</span>
+            <strong>{props.currentRaceNumber}/{props.room.settings.maxRaces}</strong>
+          </div>
+          <div>
+            <span>{props.t("ベット", "Bets")}</span>
+            <strong>{props.room.currentRace.bets.length}</strong>
+          </div>
+          <div>
+            <span>{props.t("順位", "Ranks")}</span>
+            <strong>{resultProgress}</strong>
+          </div>
+        </div>
+      </section>
+
       <section className="host-panel host-nav-panel">
         <div className="section-heading">
           <Settings2 size={20} />
@@ -1890,8 +1994,26 @@ function HostView(props: {
           <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder={props.t("例: スマブラ王決定戦", "Example: Smash Finals")} />
         </label>
         <div className="subsection-heading">
-          <strong>{props.t("デザインテーマ", "Design theme")}</strong>
-          <span>{props.t("新しい見た目と元のクラシック表示をいつでも切り替えられます。", "Switch between the new look and the original classic style anytime.")}</span>
+          <strong>{props.t("UIモード", "UI mode")}</strong>
+          <span>{props.t("画面の流れそのものを切り替えます。迷いにくい新UIと、従来UIをいつでも選べます。", "Switch the screen flow itself between the guided new UI and the original layout.")}</span>
+        </div>
+        <div className="ui-mode-grid">
+          {uiModeOrder.map((uiMode) => (
+            <button
+              className={props.room.uiMode === uiMode ? "ui-mode-card selected" : "ui-mode-card"}
+              key={uiMode}
+              type="button"
+              onClick={() => props.onUiModeChange(uiMode)}
+            >
+              <span>{props.uiModeCopy[uiMode].tag}</span>
+              <strong>{props.uiModeCopy[uiMode].label}</strong>
+              <em>{props.uiModeCopy[uiMode].note}</em>
+            </button>
+          ))}
+        </div>
+        <div className="subsection-heading">
+          <strong>{props.t("配色テーマ", "Color theme")}</strong>
+          <span>{props.t("見た目の色だけを切り替えます。元の色味へ戻す場合はクラシックを選びます。", "Switch only the color treatment. Choose Classic to return to the original color mood.")}</span>
         </div>
         <div className="theme-grid">
           {themeOrder.map((theme) => (

@@ -474,8 +474,10 @@ h2 {
 .share-card,
 .proxy-strip,
 .balance-banner,
+.smart-action-card,
 .amount-panel,
 .payout-preview,
+.host-next-card,
 .host-panel,
 .jackpot,
 .result-summary,
@@ -504,8 +506,10 @@ h2 {
 :root[data-theme="arena"] .share-card,
 :root[data-theme="arena"] .proxy-strip,
 :root[data-theme="arena"] .balance-banner,
+:root[data-theme="arena"] .smart-action-card,
 :root[data-theme="arena"] .amount-panel,
 :root[data-theme="arena"] .payout-preview,
+:root[data-theme="arena"] .host-next-card,
 :root[data-theme="arena"] .host-panel,
 :root[data-theme="arena"] .result-summary,
 :root[data-theme="arena"] .result-mode-panel,
@@ -647,7 +651,9 @@ h2 {
 .share-card,
 .proxy-strip,
 .amount-panel,
+.smart-action-card,
 .payout-preview,
+.host-next-card,
 .host-panel,
 .result-summary,
 .sync-alert,
@@ -1088,6 +1094,76 @@ select option {
   text-align: right;
 }
 
+:root[data-ui-mode="classic"] .smart-action-card,
+:root[data-ui-mode="classic"] .host-next-card {
+  display: none;
+}
+
+.smart-action-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 94px;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+.smart-action-card > div:first-child {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+
+.smart-action-card span,
+.host-next-copy span,
+.host-next-metrics span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.smart-action-card strong,
+.host-next-copy strong {
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.smart-action-card p,
+.host-next-copy p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.smart-action-meter {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  text-align: center;
+}
+
+.smart-action-meter strong {
+  color: var(--accent);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.smart-action-meter em {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .race-mini {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1341,6 +1417,56 @@ select option {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.ui-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.ui-mode-card {
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  text-align: left;
+}
+
+.ui-mode-card > span {
+  display: inline-grid;
+  place-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ui-mode-card strong {
+  align-self: center;
+  font-size: 15px;
+}
+
+.ui-mode-card em {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.ui-mode-card.selected {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
 .theme-card {
@@ -1955,6 +2081,50 @@ select option {
 
 .host-nav-panel {
   grid-column: 1 / -1;
+}
+
+.host-next-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 15px;
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
+    var(--surface);
+}
+
+.host-next-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.host-next-copy strong {
+  font-size: 18px;
+}
+
+.host-next-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.host-next-metrics div {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.host-next-metrics strong {
+  color: var(--accent);
+  font-size: 18px;
+  line-height: 1;
 }
 
 .host-hidden {
@@ -2574,6 +2744,8 @@ select option {
 
   .race-hero,
   .race-mini,
+  .smart-action-card,
+  .host-next-card,
   .host-nav-panel,
   .leader-preview.full,
   .result-summary,
@@ -2584,6 +2756,10 @@ select option {
 
   .host-tabbar {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .ui-mode-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .inline-form {
@@ -2677,6 +2853,8 @@ select option {
   .settings-grid,
   .player-grid,
   .race-mini,
+  .smart-action-card,
+  .host-next-card,
   .result-picks {
     grid-template-columns: 1fr;
   }
