@@ -20,6 +20,21 @@
   --shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
 }
 
+:root[data-theme="arena"] {
+  --bg: #ecf8e7;
+  --surface: rgba(255, 255, 250, 0.9);
+  --surface-strong: rgba(255, 255, 252, 0.98);
+  --line: rgba(38, 88, 50, 0.18);
+  --line-strong: rgba(33, 182, 82, 0.7);
+  --text: #233026;
+  --muted: #637666;
+  --accent: #22b858;
+  --accent-2: #3176ef;
+  --warn: #efb51d;
+  --danger: #f14d68;
+  --shadow: 0 18px 46px rgba(20, 80, 34, 0.14);
+}
+
 :root[data-theme="pop"] {
   --bg: #09112b;
   --surface: rgba(25, 31, 73, 0.82);
@@ -134,6 +149,12 @@ button:disabled {
     var(--bg);
 }
 
+:root[data-theme="arena"] .app-shell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 252, 0.92) 0%, rgba(222, 248, 213, 0.96) 44%, rgba(238, 247, 255, 0.98) 100%),
+    var(--bg);
+}
+
 :root[data-theme="party"] .app-shell {
   background:
     radial-gradient(circle at 20% 4%, rgba(255, 76, 105, 0.18), transparent 28%),
@@ -162,6 +183,16 @@ button:disabled {
     linear-gradient(135deg, #f5fbff 0%, #bde8ff 48%, #eefbf3 100%);
 }
 
+:root[data-theme="arena"] .phone-frame {
+  background:
+    radial-gradient(circle at 10px 10px, rgba(33, 82, 38, 0.055) 2px, transparent 3px) 0 0 / 22px 22px,
+    linear-gradient(180deg, rgba(255, 255, 253, 0.92), rgba(231, 250, 224, 0.9));
+}
+
+:root[data-theme="arena"] .ambient {
+  display: none;
+}
+
 :root[data-theme="party"] .phone-frame {
   background:
     radial-gradient(circle at 12px 12px, rgba(36, 48, 40, 0.06) 2px, transparent 3px) 0 0 / 22px 22px,
@@ -182,10 +213,21 @@ button:disabled {
   box-shadow: 0 14px 30px rgba(37, 191, 69, 0.18);
 }
 
+:root[data-theme="arena"] .primary-button {
+  color: #ffffff;
+  background: linear-gradient(135deg, #22b858, #3176ef);
+  box-shadow: 0 14px 28px rgba(34, 184, 88, 0.18);
+}
+
 :root[data-theme="garden"] .primary-button,
 :root[data-theme="candy"] .primary-button,
 :root[data-theme="sky"] .primary-button {
   color: #ffffff;
+}
+
+:root[data-theme="arena"] .race-hero {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 252, 0.94), rgba(219, 248, 208, 0.88) 58%, rgba(224, 238, 255, 0.9));
 }
 
 :root[data-theme="party"] .race-hero {
@@ -216,18 +258,25 @@ button:disabled {
   background: rgba(34, 45, 66, 0.94);
 }
 
+:root[data-theme="arena"] .bottom-nav {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(35, 49, 72, 0.94);
+}
+
 :root[data-theme="garden"] .bottom-nav,
 :root[data-theme="candy"] .bottom-nav,
 :root[data-theme="sky"] .bottom-nav {
   background: rgba(34, 45, 66, 0.94);
 }
 
+:root[data-theme="arena"] .bottom-nav button,
 :root[data-theme="garden"] .bottom-nav button,
 :root[data-theme="candy"] .bottom-nav button,
 :root[data-theme="sky"] .bottom-nav button {
   color: #a8b49f;
 }
 
+:root[data-theme="arena"] .bottom-nav button.active,
 :root[data-theme="garden"] .bottom-nav button.active,
 :root[data-theme="candy"] .bottom-nav button.active,
 :root[data-theme="sky"] .bottom-nav button.active {
@@ -242,6 +291,10 @@ button:disabled {
 :root[data-theme="party"] .bottom-nav button.active {
   color: #ffffff;
   background: linear-gradient(135deg, #25bf45, #1a9869);
+}
+
+:root[data-theme="arena"] .nav-indicator {
+  background: linear-gradient(135deg, #22b858, #3176ef);
 }
 
 .phone-frame {
@@ -441,6 +494,31 @@ h2 {
   padding: 10px;
   border-radius: 18px;
   text-align: center;
+}
+
+:root[data-theme="arena"] .status-strip div,
+:root[data-theme="arena"] .metric,
+:root[data-theme="arena"] .join-panel,
+:root[data-theme="arena"] .leader-preview,
+:root[data-theme="arena"] .guide-panel,
+:root[data-theme="arena"] .share-card,
+:root[data-theme="arena"] .proxy-strip,
+:root[data-theme="arena"] .balance-banner,
+:root[data-theme="arena"] .amount-panel,
+:root[data-theme="arena"] .payout-preview,
+:root[data-theme="arena"] .host-panel,
+:root[data-theme="arena"] .result-summary,
+:root[data-theme="arena"] .result-mode-panel,
+:root[data-theme="arena"] .ticket-board,
+:root[data-theme="arena"] .contestant,
+:root[data-theme="arena"] .bet-type {
+  box-shadow: 0 10px 24px rgba(31, 96, 45, 0.08);
+}
+
+:root[data-theme="arena"] .status-strip div,
+:root[data-theme="arena"] .metric,
+:root[data-theme="arena"] .race-mini div {
+  background: rgba(255, 255, 250, 0.78);
 }
 
 .status-strip strong {
@@ -777,9 +855,19 @@ h2 {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 242, 174, 0.72));
 }
 
+:root[data-theme="arena"] .mode-card.host {
+  border-color: rgba(34, 184, 88, 0.36);
+  background: linear-gradient(135deg, rgba(255, 255, 252, 0.96), rgba(222, 249, 220, 0.82));
+}
+
 :root[data-theme="party"] .mode-card.guest {
   border-color: rgba(53, 104, 255, 0.36);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(194, 226, 255, 0.76));
+}
+
+:root[data-theme="arena"] .mode-card.guest {
+  border-color: rgba(49, 118, 239, 0.3);
+  background: linear-gradient(135deg, rgba(255, 255, 252, 0.96), rgba(218, 235, 255, 0.82));
 }
 
 .guide-steps {
@@ -1691,10 +1779,6 @@ select option {
   justify-self: center;
 }
 
-:root:not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .ticket-row {
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .ticket-row.selected,
 .matrix-cell.selected,
 .third-pick-strip button.selected {
@@ -1781,7 +1865,11 @@ select option {
   background: rgba(255, 255, 255, 0.72);
 }
 
-:root:not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .matrix-cell {
+:root:not([data-theme="arena"]):not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .ticket-row {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root:not([data-theme="arena"]):not([data-theme="party"]):not([data-theme="garden"]):not([data-theme="candy"]):not([data-theme="sky"]) .matrix-cell {
   background: rgba(255, 255, 255, 0.08);
 }
 

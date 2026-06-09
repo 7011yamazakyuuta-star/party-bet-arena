@@ -23,7 +23,7 @@ export type LocalRoomSummary = {
   updatedAt: number;
 };
 
-const validThemes = new Set<ThemeName>(["party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
+const validThemes = new Set<ThemeName>(["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
 const fallbackEmojis = ["🎮", "😎", "🌟", "🚗", "🎲", "🔥", "🍀", "🏆"];
 const fallbackContestantIcons = ["👑", "🤖", "⚡", "🍀", "🚀", "🎯", "💎", "⭐"];
 const legacyContestantIcons: Record<string, string> = {

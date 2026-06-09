@@ -75,7 +75,7 @@ type BetDisplayMode = "cards" | "board";
 type ResultDisplayMode = "ranking" | "payouts";
 type HostSection = "progress" | "settings" | "players" | "contestants";
 
-const themeOrder: ThemeName[] = ["party", "garden", "candy", "sky", "neon", "pop", "minimal"];
+const themeOrder: ThemeName[] = ["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"];
 const emojiChoices = [
   "😀",
   "😎",
@@ -105,7 +105,8 @@ const emojiChoices = [
 
 function getThemeCopy(t: Translate): Record<ThemeName, { label: string; note: string }> {
   return {
-    party: { label: t("パーティ", "Party"), note: t("やさしく明るい定番テーマ", "Bright and friendly default") },
+    arena: { label: t("アリーナ", "Arena"), note: t("見やすさ重視の新デザイン", "New polished default") },
+    party: { label: t("クラシック", "Classic"), note: t("今までの標準デザイン", "Original default look") },
     garden: { label: t("ガーデン", "Garden"), note: t("緑と白の落ち着いた遊び場", "Soft green and calm") },
     candy: { label: t("キャンディ", "Candy"), note: t("少しポップでにぎやか", "Playful and colorful") },
     sky: { label: t("スカイ", "Sky"), note: t("青空っぽく見やすい", "Clear and airy") },
@@ -1889,8 +1890,8 @@ function HostView(props: {
           <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder={props.t("例: スマブラ王決定戦", "Example: Smash Finals")} />
         </label>
         <div className="subsection-heading">
-          <strong>{props.t("メインカラー設定", "Main color theme")}</strong>
-          <span>{props.t("見やすさや雰囲気に合わせて、全員の画面テーマを切り替えます。", "Switch the shared room theme for readability and mood.")}</span>
+          <strong>{props.t("デザインテーマ", "Design theme")}</strong>
+          <span>{props.t("新しい見た目と元のクラシック表示をいつでも切り替えられます。", "Switch between the new look and the original classic style anytime.")}</span>
         </div>
         <div className="theme-grid">
           {themeOrder.map((theme) => (

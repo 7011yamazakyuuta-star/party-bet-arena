@@ -22,7 +22,7 @@ export const createInitialRoom = (): Room => ({
   isDemo: true,
   joinCode: "2468",
   hostPin: "0000",
-  theme: "party",
+  theme: "arena",
   startingBalance: 1000,
   settings: {
     maxPlayers: 8,
