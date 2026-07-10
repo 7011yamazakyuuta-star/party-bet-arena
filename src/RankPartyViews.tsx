@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   ArrowLeft,
@@ -11,7 +11,7 @@ import {
   CircleDollarSign,
   Crown,
   Flag,
-  Gamepad2,
+  Globe2,
   Home,
   Info,
   LogIn,
@@ -21,13 +21,13 @@ import {
   Plus,
   Radio,
   Save,
+  ScanLine,
   Settings2,
   Share2,
   Sun,
   Ticket,
   Trash2,
   Trophy,
-  UserPlus,
   Users,
   WalletCards,
   Zap,
@@ -35,7 +35,6 @@ import {
 import {
   currency,
   getAvailableBalance,
-  getBetPickIds,
   getContestant,
   getEffectiveMultiplier,
   rankedPlayers,
@@ -46,17 +45,14 @@ import type {
   BetType,
   LanguageName,
   Player,
-  RaceBetResult,
   Room,
   ThemeName,
-  UiModeName,
 } from "./lib/types";
 
 export type RankTabKey = "home" | "bet" | "host" | "ranking";
+export type RankHostSection = "results" | "settings" | "people";
 type Translate = (ja: string, en: string) => string;
-type BetDisplayMode = "cards" | "board";
 type ResultDisplayMode = "ranking" | "payouts";
-type HostSection = "progress" | "settings" | "players" | "contestants";
 
 const languages: Array<{ value: LanguageName; label: string }> = [
   { value: "ja", label: "日本語" },
@@ -77,7 +73,7 @@ const emojiChoices = [
 ];
 
 const levelChoices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-const quickAmounts = [10, 50, 100, 500, 1000, 5000];
+const quickAmounts = [10, 50, 100, 500, 1000];
 
 function LanguageSelect(props: {
   value: LanguageName;
@@ -87,12 +83,13 @@ function LanguageSelect(props: {
   return (
     <label className="rp-language">
       <span className="sr-only">{props.label}</span>
+      <Globe2 size={18} aria-hidden="true" />
       <select value={props.value} onChange={(event) => props.onChange(event.target.value as LanguageName)}>
         {languages.map((language) => (
           <option value={language.value} key={language.value}>{language.label}</option>
         ))}
       </select>
-      <ChevronDown size={18} aria-hidden="true" />
+      <ChevronDown className="rp-language-chevron" size={18} aria-hidden="true" />
     </label>
   );
 }
@@ -118,7 +115,6 @@ export function RankLaunchView(props: {
   language: LanguageName;
   onLanguageChange: (value: LanguageName) => void;
   roomSummaries: LocalRoomSummary[];
-  firebaseReady: boolean;
   t: Translate;
   onCreateRoom: () => void;
   onJoin: () => void;
@@ -126,7 +122,47 @@ export function RankLaunchView(props: {
   onDeleteRoom: (roomId: string) => void;
 }) {
   const [showJoin, setShowJoin] = useState(false);
+  const [qrStatus, setQrStatus] = useState("");
+  const qrInputRef = useRef<HTMLInputElement>(null);
   const canJoin = Boolean(props.joinRoomId.trim() && props.joinCode.trim());
+
+  const readQrImage = async (file?: File) => {
+    if (!file) return;
+
+    type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => {
+      detect: (source: ImageBitmap) => Promise<Array<{ rawValue: string }>>;
+    };
+    const Detector = (window as typeof window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+    if (!Detector) {
+      setQrStatus(props.t("このブラウザではQR読み取りに対応していません。IDとコードを入力してください。", "QR scanning is not supported here. Enter the ID and code instead."));
+      return;
+    }
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const detector = new Detector({ formats: ["qr_code"] });
+      const [result] = await detector.detect(bitmap);
+      bitmap.close();
+      if (!result?.rawValue) throw new Error("QR code not found");
+
+      const raw = result.rawValue.trim();
+      const parsedUrl = new URL(raw, window.location.href);
+      let roomId = parsedUrl.searchParams.get("roomId") ?? parsedUrl.searchParams.get("room") ?? parsedUrl.searchParams.get("id") ?? "";
+      let code = parsedUrl.searchParams.get("joinCode") ?? parsedUrl.searchParams.get("code") ?? "";
+      if (!roomId || !code) {
+        const match = raw.match(/([A-Z0-9]{4,10})[^A-Z0-9]+([0-9]{4,8})/i);
+        roomId ||= match?.[1] ?? "";
+        code ||= match?.[2] ?? "";
+      }
+      if (!roomId || !code) throw new Error("Room details not found");
+
+      props.setJoinRoomId(roomId.toUpperCase());
+      props.setJoinCode(code);
+      setQrStatus(props.t("ルーム情報を読み取りました。", "Room details scanned."));
+    } catch {
+      setQrStatus(props.t("QRコードを読み取れませんでした。IDとコードを確認してください。", "Could not read that QR code. Check the ID and code."));
+    }
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -168,6 +204,19 @@ export function RankLaunchView(props: {
             <span>{props.t("参加コード", "Join code")}</span>
             <input inputMode="numeric" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value)} placeholder="2468" />
           </label>
+          <input
+            ref={qrInputRef}
+            hidden
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => void readQrImage(event.target.files?.[0])}
+          />
+          <button className="rp-qr-action" type="button" onClick={() => qrInputRef.current?.click()}>
+            <ScanLine size={22} />
+            {props.t("QRコードを読み取る", "Scan a QR code")}
+          </button>
+          {qrStatus && <p className="rp-qr-status" role="status">{qrStatus}</p>}
           <button className="rp-primary-button" type="submit" disabled={!canJoin}>{props.t("参加する", "Join")}</button>
           <p className="rp-form-help">{props.t("幹事から共有されたIDとコードを入力してください", "Use the ID and code shared by the host")}</p>
         </form>
@@ -238,58 +287,48 @@ export function RankLaunchView(props: {
   );
 }
 
-export function RankJoinPanel(props: {
-  joinName: string;
-  setJoinName: (value: string) => void;
-  joinRoomId: string;
-  setJoinRoomId: (value: string) => void;
-  joinCode: string;
-  setJoinCode: (value: string) => void;
-  onJoin: () => void;
-  t: Translate;
-}) {
-  return (
-    <div className="rp-entry rp-inline-join">
-      <div className="rp-page-heading">
-        <h1>{props.t("ルームに参加", "Join a room")}</h1>
-        <p>{props.t("幹事から共有された情報を入力してください", "Enter the details shared by the host")}</p>
-      </div>
-      <form className="rp-form-card" onSubmit={(event) => { event.preventDefault(); props.onJoin(); }}>
-        <label><span>{props.t("表示名", "Display name")}</span><input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} /></label>
-        <label><span>{props.t("ルームID", "Room ID")}</span><input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value.toUpperCase())} /></label>
-        <label><span>{props.t("参加コード", "Join code")}</span><input inputMode="numeric" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value)} /></label>
-        <button className="rp-primary-button" type="submit">{props.t("参加する", "Join")}</button>
-      </form>
-    </div>
-  );
-}
-
 export function RankRoomHeader(props: {
   tab: RankTabKey;
   room: Room;
-  sessionRole: "host" | "player";
   activePlayer?: Player;
-  currentRaceNumber: number;
   t: Translate;
   onBack: () => void;
-  onHostMode: () => void;
-  onJoinMode: () => void;
 }) {
   const balance = props.activePlayer?.balance ?? props.room.players[0]?.balance ?? props.room.startingBalance;
-  const isHostSurface = props.tab === "home" || props.tab === "host";
+  const isHostSurface = props.tab === "home";
   const isBet = props.tab === "bet";
 
   if (isHostSurface) {
     return (
       <header className="rp-room-header rp-host-header">
-        <div className="rp-room-brand">
+        <button className="rp-room-brand" type="button" onClick={props.onBack}>
           <span className="rp-brand-mark"><Crown size={28} /></span>
           <span>
             <strong>{props.t("ホストルーム", "Host room")}</strong>
             <small>{props.room.name || props.t("新しい勝負", "New match")}</small>
           </span>
+          <ChevronDown size={18} aria-hidden="true" />
+        </button>
+        <span className="rp-live-pill"><i />{props.room.currentRace.status === "betting" ? props.t("進行中", "Live") : props.t("結果確定", "Settled")}</span>
+      </header>
+    );
+  }
+
+  if (props.tab === "ranking") {
+    return (
+      <header className="rp-room-header rp-ranking-header">
+        <div className="rp-section-title">
+          <span className="rp-brand-mark"><Crown size={25} /></span>
+          <strong>{props.t("ランクパーティ", "Rank Party")}</strong>
         </div>
-        <span className="rp-live-pill"><i />{props.t("進行中", "Live")}</span>
+        <div className="rp-header-actions">
+          <div className="rp-balance-pill">
+            <span>{props.t("残高", "Balance")}</span>
+            <strong>{currency.format(balance)}</strong>
+            <span className="rp-balance-plus" aria-hidden="true"><Plus size={19} /></span>
+          </div>
+          <span className="rp-notification" aria-label={props.t("お知らせ", "Notifications")}><Bell size={22} /><i /></span>
+        </div>
       </header>
     );
   }
@@ -306,7 +345,7 @@ export function RankRoomHeader(props: {
       <div className="rp-balance-pill">
         <span>{props.t("残高", "Balance")}</span>
         <strong>{currency.format(balance)}</strong>
-        {props.tab === "ranking" ? <Bell size={21} /> : <button type="button" onClick={props.sessionRole === "host" ? props.onHostMode : props.onJoinMode}><Plus size={19} /></button>}
+        <span className="rp-balance-plus" aria-hidden="true"><Plus size={19} /></span>
       </div>
     </header>
   );
@@ -314,20 +353,14 @@ export function RankRoomHeader(props: {
 
 export function RankHomeView(props: {
   room: Room;
-  ranking: Player[];
   currentRaceNumber: number;
+  placedPlayerCount: number;
   hasJackpot: boolean;
-  publicUrl: string;
-  roomSummaries: LocalRoomSummary[];
   t: Translate;
-  onCreateRoom: () => void;
   onBetTab: () => void;
-  onHostTab: () => void;
-  onJoinMode: () => void;
-  onResetDemo: () => void;
-  onCopyInvite: () => void;
-  onOpenRoom: (roomId: string) => void;
-  onDeleteRoom: (roomId: string) => void;
+  onOpenHostSection: (section: RankHostSection) => void;
+  onViewPayouts: () => void;
+  onNextRace: () => void;
 }) {
   const settled = props.room.currentRace.status === "settled";
   const resultDone = props.room.currentRace.resultIds.length === props.room.contestants.length;
@@ -341,31 +374,31 @@ export function RankHomeView(props: {
         <h2>{props.t("第", "Race ")} <b>{props.currentRaceNumber}</b> / {props.room.settings.maxRaces} {props.t("レース", "")}</h2>
         <div className="rp-progress-track"><span style={{ width: `${progress}%` }} /></div>
         <div className="rp-progress-stats">
-          <div><Ticket size={25} /><span>{props.t("ベット完了", "Bets done")}</span><strong>{props.room.currentRace.bets.length} / {props.room.players.length}</strong></div>
-          <div><Settings2 size={25} /><span>{props.t("結果", "Results")}</span><strong>{resultDone ? props.t("入力済み", "Entered") : props.t("未入力", "Pending")}</strong></div>
-          <div><CircleDollarSign size={25} /><span>{props.t("精算", "Payout")}</span><strong>{settled ? props.t("処理済み", "Done") : props.t("未処理", "Pending")}</strong></div>
+          <button type="button" onClick={props.onBetTab}><Ticket size={25} /><span>{props.t("ベット完了", "Bets done")}</span><strong>{props.placedPlayerCount} / {props.room.players.length}</strong></button>
+          <button type="button" onClick={() => props.onOpenHostSection("results")}><Settings2 size={25} /><span>{props.t("結果", "Results")}</span><strong>{resultDone ? props.t("入力済み", "Entered") : props.t("未入力", "Pending")}</strong></button>
+          <button type="button" onClick={settled ? props.onViewPayouts : () => props.onOpenHostSection("results")}><CircleDollarSign size={25} /><span>{props.t("精算", "Payout")}</span><strong>{settled ? props.t("処理済み", "Done") : props.t("未処理", "Pending")}</strong></button>
         </div>
       </section>
 
       <nav className="rp-host-shortcuts" aria-label={props.t("ホスト管理", "Host controls")}>
         <button className="active" type="button">{props.t("進行", "Run")}</button>
-        <button type="button" onClick={props.onHostTab}>{props.t("基本", "Setup")}</button>
-        <button type="button" onClick={props.onHostTab}>{props.t("参加者", "Bettors")}</button>
-        <button type="button" onClick={props.onHostTab}>{props.t("対戦者", "Racers")}</button>
+        <button type="button" onClick={() => props.onOpenHostSection("settings")}>{props.t("設定", "Setup")}</button>
+        <button type="button" onClick={() => props.onOpenHostSection("people")}>{props.t("参加者", "Bettors")}</button>
+        <button type="button" onClick={() => props.onOpenHostSection("people")}>{props.t("対戦者", "Racers")}</button>
       </nav>
 
       <div className="rp-action-list">
-        <button className="rp-action-card rp-action-primary" type="button" onClick={props.onHostTab}>
+        <button className="rp-action-card rp-action-primary" type="button" onClick={() => props.onOpenHostSection("results")}>
           <span><Settings2 size={30} /></span>
           <div><strong>{props.t("結果を入力", "Enter results")}</strong><small>{props.t("着順を入力して精算へ進む", "Enter finish order and continue to payouts")}</small></div>
           <ChevronRight size={26} />
         </button>
-        <button className="rp-action-card" type="button" onClick={props.onHostTab}>
+        <button className="rp-action-card" type="button" onClick={settled ? props.onViewPayouts : () => props.onOpenHostSection("results")}>
           <span><CircleDollarSign size={28} /></span>
           <div><strong>{props.t("配当を精算", "Settle payouts")}</strong><small>{props.t("配当を反映して残高更新", "Apply payouts and update balances")}</small></div>
           <ChevronRight size={25} />
         </button>
-        <button className="rp-action-card" type="button" onClick={settled ? props.onHostTab : props.onBetTab}>
+        <button className="rp-action-card" type="button" onClick={settled ? props.onNextRace : props.onBetTab}>
           <span><Flag size={28} /></span>
           <div><strong>{props.t("次のレースを開始", "Start next race")}</strong><small>{props.t("次の投票受付を開始", "Open the next betting round")}</small></div>
           <ChevronRight size={25} />
@@ -386,11 +419,20 @@ function BetTypeTabs(props: {
   value: BetType;
   onChange: (value: BetType) => void;
   labels: Record<BetType, { title: string; note: string }>;
+  disabled?: boolean;
 }) {
   return (
     <div className="rp-bet-type-tabs" role="tablist" aria-label="Bet type">
       {(["win", "place", "exacta", "trifecta"] as BetType[]).map((type) => (
-        <button className={props.value === type ? "active" : ""} type="button" key={type} onClick={() => props.onChange(type)}>
+        <button
+          aria-selected={props.value === type}
+          className={props.value === type ? "active" : ""}
+          disabled={props.disabled}
+          role="tab"
+          type="button"
+          key={type}
+          onClick={() => props.onChange(type)}
+        >
           {props.labels[type].title}
         </button>
       ))}
@@ -402,18 +444,25 @@ function RacerList(props: {
   room: Room;
   betType: BetType;
   selectedPickIds: string[];
-  displayMode: BetDisplayMode;
   onPick: (contestantId: string) => void;
+  disabled?: boolean;
 }) {
   const pickCount = requiredPickCount(props.betType);
   return (
-    <div className={props.displayMode === "cards" ? "rp-racer-list rp-racer-cards" : "rp-racer-list"}>
+    <div className="rp-racer-list">
       {props.room.contestants.map((contestant, index) => {
         const selectedIndex = props.selectedPickIds.indexOf(contestant.id);
         const selected = selectedIndex >= 0;
         const multiplier = getEffectiveMultiplier(props.room, props.betType, [contestant]);
         return (
-          <button className={selected ? "rp-racer-row selected" : "rp-racer-row"} type="button" key={contestant.id} onClick={() => props.onPick(contestant.id)}>
+          <button
+            aria-pressed={selected}
+            className={selected ? "rp-racer-row selected" : "rp-racer-row"}
+            disabled={props.disabled}
+            type="button"
+            key={contestant.id}
+            onClick={() => props.onPick(contestant.id)}
+          >
             <span className="rp-lane-number" style={{ "--lane": contestant.accent } as CSSProperties}>{index + 1}</span>
             <span className="rp-racer-avatar" style={{ "--lane": contestant.accent } as CSSProperties}>{contestant.icon}</span>
             <span className="rp-racer-copy">
@@ -437,18 +486,13 @@ export function RankBetView(props: {
   activePlayer?: Player;
   proxyPlayerId: string;
   setProxyPlayerId: (value: string) => void;
-  selectedContestantId: string;
-  setSelectedContestantId: (value: string) => void;
   selectedPickIds: string[];
   onPickContestant: (contestantId: string) => void;
   betType: BetType;
   setBetType: (value: BetType) => void;
   amount: number;
   setAmount: (value: number) => void;
-  selectedContestant?: ReturnType<typeof getContestant>;
   potentialPayout: number;
-  displayMode: BetDisplayMode;
-  setDisplayMode: (value: BetDisplayMode) => void;
   currentRaceNumber: number;
   placedPlayerCount: number;
   allPlayersPlaced: boolean;
@@ -468,6 +512,7 @@ export function RankBetView(props: {
   const multiplier = selectionComplete ? getEffectiveMultiplier(props.room, props.betType, selectedContestants) : 0;
   const bettingOpen = props.room.currentRace.status === "betting";
   const canPlace = bettingOpen && Boolean(props.activePlayer) && selectionComplete && props.amount > 0 && !(props.sessionRole === "player" && activePlayerPlaced);
+  const editorLocked = props.sessionRole === "player" && activePlayerPlaced;
   const prompt = props.betType === "win"
     ? props.t("1着になる対戦者を予想してください", "Choose the winner")
     : props.betType === "place"
@@ -490,6 +535,16 @@ export function RankBetView(props: {
         </section>
       )}
 
+      {props.sessionRole === "host" && (
+        <label className="rp-proxy-select rp-proxy-bar">
+          <span>{props.t("投票する参加者", "Bettor")}</span>
+          <select value={props.proxyPlayerId} onChange={(event) => props.setProxyPlayerId(event.target.value)}>
+            <option value="">{props.t("参加者を選択", "Choose a bettor")}</option>
+            {props.room.players.map((player) => <option value={player.id} key={player.id}>{player.emoji} {player.name}</option>)}
+          </select>
+        </label>
+      )}
+
       <section className="rp-bet-card">
         <header className="rp-race-heading">
           <h2>{props.t("第", "Race ")} <b>{props.currentRaceNumber}</b> {props.t("レース", "")}</h2>
@@ -500,36 +555,25 @@ export function RankBetView(props: {
           </details>
         </header>
 
-        {props.sessionRole === "host" && (
-          <label className="rp-proxy-select">
-            <span>{props.t("代行入力する参加者", "Bettor")}</span>
-            <select value={props.proxyPlayerId} onChange={(event) => props.setProxyPlayerId(event.target.value)}>
-              <option value="">{props.t("代行なし / 参加者を選択", "No proxy / choose bettor")}</option>
-              {props.room.players.map((player) => <option value={player.id} key={player.id}>{player.emoji} {player.name}</option>)}
-            </select>
-          </label>
-        )}
-
-        <BetTypeTabs value={props.betType} onChange={props.setBetType} labels={props.betTypeLabels} />
+        <BetTypeTabs value={props.betType} onChange={props.setBetType} labels={props.betTypeLabels} disabled={editorLocked} />
         <p className="rp-bet-prompt">{prompt}</p>
 
-        <div className="rp-view-choice" role="group" aria-label={props.t("表示切り替え", "View")}>
-          <button className={props.displayMode === "board" ? "active" : ""} type="button" onClick={() => props.setDisplayMode("board")}>{props.t("馬券表", "Ticket")}</button>
-          <button className={props.displayMode === "cards" ? "active" : ""} type="button" onClick={() => props.setDisplayMode("cards")}>{props.t("カード", "Cards")}</button>
-        </div>
-
-        <RacerList room={props.room} betType={props.betType} selectedPickIds={props.selectedPickIds} displayMode={props.displayMode} onPick={props.onPickContestant} />
+        <RacerList room={props.room} betType={props.betType} selectedPickIds={props.selectedPickIds} onPick={props.onPickContestant} disabled={editorLocked} />
       </section>
 
       <section className="rp-ticket-card">
         <header>
           <span>{props.t("選択中の投票", "Selected ticket")}</span>
-          <button type="button" onClick={() => props.onPickOrder([])}><Trash2 size={16} />{props.t("削除", "Clear")}</button>
+          <button type="button" onClick={() => props.onPickOrder([])} disabled={editorLocked}><Trash2 size={16} />{props.t("削除", "Clear")}</button>
         </header>
         <div className="rp-ticket-selection">
           <span>{props.betTypeLabels[props.betType].title}</span>
           {Array.from({ length: pickCount }).map((_, index) => (
-            <b key={index}>{selectedContestants[index] ? `${index + 1}  ${selectedContestants[index].name}` : `${index + 1}  -`}</b>
+            <b key={index}>
+              <i>{index + 1}{props.t("着", "")}</i>
+              <em>{selectedContestants[index] ? props.room.contestants.findIndex((item) => item.id === selectedContestants[index].id) + 1 : "-"}</em>
+              <strong>{selectedContestants[index]?.name ?? "-"}</strong>
+            </b>
           ))}
         </div>
         <div className="rp-payout-line">
@@ -541,17 +585,18 @@ export function RankBetView(props: {
           <span>{props.t("ベット金額", "Bet amount")}</span>
           <small>{props.t("購入可能額", "Available")} {currency.format(balance)}</small>
         </div>
-        <div className="rp-amount-stepper">
-          <button type="button" onClick={() => adjustAmount(-10)} aria-label={props.t("減らす", "Decrease")}><Minus size={21} /></button>
-          <strong>{currency.format(props.amount)}</strong>
-          <button type="button" onClick={() => adjustAmount(10)} aria-label={props.t("増やす", "Increase")}><Plus size={21} /></button>
+        <div className="rp-amount-controls">
+          <button type="button" onClick={() => adjustAmount(-1000)} disabled={editorLocked}>-1,000</button>
+          <div className="rp-amount-stepper">
+            <button type="button" onClick={() => adjustAmount(-10)} disabled={editorLocked} aria-label={props.t("減らす", "Decrease")}><Minus size={20} /></button>
+            <strong>{currency.format(props.amount)}</strong>
+            <button type="button" onClick={() => adjustAmount(10)} disabled={editorLocked} aria-label={props.t("増やす", "Increase")}><Plus size={20} /></button>
+          </div>
+          <button type="button" onClick={() => adjustAmount(1000)} disabled={editorLocked}>+1,000</button>
         </div>
         <div className="rp-quick-amounts">
           {quickAmounts.map((value) => (
-            <button type="button" key={value} onClick={() => adjustAmount(value)}>+{currency.format(value)}</button>
-          ))}
-          {quickAmounts.slice(0, 3).map((value) => (
-            <button className="minus" type="button" key={`minus-${value}`} onClick={() => adjustAmount(-value)}>-{currency.format(value)}</button>
+            <button type="button" key={value} onClick={() => adjustAmount(value)} disabled={editorLocked}>+{currency.format(value)}</button>
           ))}
         </div>
         <button className="rp-primary-button rp-place-bet" type="button" onClick={props.onPlaceBet} disabled={!canPlace}>
@@ -561,22 +606,6 @@ export function RankBetView(props: {
 
       <p className="rp-play-money-note"><WalletCards size={17} />{props.t("このアプリは遊び用コインのみを扱います", "This app uses play coins only")}</p>
     </div>
-  );
-}
-
-function HostTabs(props: { value: HostSection; onChange: (value: HostSection) => void; t: Translate }) {
-  const tabs: Array<{ value: HostSection; label: string }> = [
-    { value: "progress", label: props.t("進行", "Run") },
-    { value: "settings", label: props.t("基本", "Setup") },
-    { value: "players", label: props.t("参加者", "Bettors") },
-    { value: "contestants", label: props.t("対戦者", "Racers") },
-  ];
-  return (
-    <nav className="rp-host-tabs">
-      {tabs.map((tab) => (
-        <button className={props.value === tab.value ? "active" : ""} type="button" key={tab.value} onClick={() => props.onChange(tab.value)}>{tab.label}</button>
-      ))}
-    </nav>
   );
 }
 
@@ -592,6 +621,7 @@ function Toggle(props: { checked: boolean; label: string; onChange: (checked: bo
 
 export function RankHostView(props: {
   room: Room;
+  section: RankHostSection;
   newPlayerName: string;
   setNewPlayerName: (value: string) => void;
   newPlayerOffline: boolean;
@@ -613,12 +643,7 @@ export function RankHostView(props: {
   bonusAmount: number;
   setBonusAmount: (value: number) => void;
   resultIds: string[];
-  themeCopy: Record<ThemeName, { label: string; note: string }>;
-  uiModeCopy: Record<UiModeName, { label: string; note: string; tag: string }>;
-  betTypeLabels: Record<BetType, { title: string; note: string }>;
   currentRaceNumber: number;
-  placedPlayerCount: number;
-  allPlayersPlaced: boolean;
   t: Translate;
   onAddPlayer: () => void;
   onDeletePlayer: (playerId: string) => void;
@@ -626,7 +651,6 @@ export function RankHostView(props: {
   onDeleteContestant: (contestantId: string) => void;
   onOddsChange: (contestantId: string, odds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
-  onUiModeChange: (uiMode: UiModeName) => void;
   onRoomNameChange: (name: string) => void;
   onStartingBalanceChange: (value: number) => void;
   onPlayerEmojiChange: (playerId: string, emoji: string) => void;
@@ -640,22 +664,21 @@ export function RankHostView(props: {
   onResultPick: (contestantId: string) => void;
   onSettle: () => void;
   onNextRace: () => void;
+  onBack: () => void;
 }) {
-  const [section, setSection] = useState<HostSection>("progress");
   const settled = props.room.currentRace.status === "settled";
   const resultComplete = props.resultIds.length === props.room.contestants.length;
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-    document.querySelector<HTMLElement>(".phone-frame")?.scrollTo({ top: 0, behavior: "auto" });
-  }, [section]);
-
   return (
-    <div className="rp-screen rp-host-screen">
-      <HostTabs value={section} onChange={setSection} t={props.t} />
+    <div className={`rp-screen rp-host-screen rp-host-${props.section}`}>
 
-      {section === "progress" && (
+      {props.section === "results" && (
         <>
+          <header className="rp-task-header">
+            <button className="rp-icon-button" type="button" onClick={props.onBack} aria-label={props.t("戻る", "Back")}><ArrowLeft size={24} /></button>
+            <span><Trophy size={22} /></span>
+            <div><strong>{props.t(`第${props.currentRaceNumber}レース`, `Race ${props.currentRaceNumber}`)}</strong><small>{props.t("結果入力", "Enter results")}</small></div>
+          </header>
           <section className="rp-result-entry">
             <header className="rp-section-heading">
               <span><Trophy size={24} /></span>
@@ -685,28 +708,10 @@ export function RankHostView(props: {
               <Flag size={20} />{props.currentRaceNumber >= props.room.settings.maxRaces ? props.t("最終順位を見る", "View final ranking") : props.t("次のレースを開始", "Start next race")}
             </button>
           </section>
-
-          <section className="rp-bet-status">
-            <header className="rp-section-heading">
-              <span><BarChart3 size={23} /></span>
-              <div><h2>{props.t("ベット状況", "Bet status")}</h2><p>{props.t(`${props.placedPlayerCount}/${props.room.players.length}人がベット済み`, `${props.placedPlayerCount}/${props.room.players.length} bettors ready`)}</p></div>
-            </header>
-            <div className="rp-bet-status-list">
-              {props.room.currentRace.bets.length === 0 ? (
-                <p>{props.t("まだベットはありません", "No bets yet")}</p>
-              ) : props.room.currentRace.bets.map((bet) => {
-                const player = props.room.players.find((item) => item.id === bet.playerId);
-                const picks = getBetPickIds(bet).map((id) => getContestant(props.room, id)?.name ?? "-").join(" → ");
-                return (
-                  <div key={bet.id}><span>{player?.emoji} {player?.name}</span><strong>{picks}</strong><b>{currency.format(bet.amount)}</b></div>
-                );
-              })}
-            </div>
-          </section>
         </>
       )}
 
-      {section === "settings" && (
+      {props.section === "settings" && (
         <section className="rp-settings-page">
           <div className="rp-page-heading compact"><h1>{props.t("基本設定", "Room setup")}</h1><p>{props.t("ルーム情報とゲームルールを管理", "Manage room details and rules")}</p></div>
           <div className="rp-settings-card">
@@ -732,22 +737,36 @@ export function RankHostView(props: {
               <button className={props.room.theme === "neon" ? "active" : ""} type="button" onClick={() => props.onThemeChange("neon")}><Moon size={18} />{props.t("ダーク", "Dark")}</button>
             </div>
             <button className="rp-secondary-button" type="button" onClick={props.onAutoOdds}><Zap size={19} />{props.t("オッズを再計算", "Recalculate odds")}</button>
+            <details className="rp-advanced-settings">
+              <summary>{props.t("特別ボーナス", "Special bonus")}</summary>
+              <div>
+                <select value={props.bonusPlayerId} onChange={(event) => props.setBonusPlayerId(event.target.value)}>
+                  <option value="">{props.t("参加者を選択", "Choose a bettor")}</option>
+                  {props.room.players.map((player) => <option value={player.id} key={player.id}>{player.name}</option>)}
+                </select>
+                <input type="number" value={props.bonusAmount} onChange={(event) => props.setBonusAmount(Number(event.target.value))} />
+                <button className="rp-secondary-button" type="button" onClick={props.onGrantBonus}><Plus size={18} />{props.t("付与", "Grant")}</button>
+              </div>
+            </details>
             <p className="rp-auto-save"><Save size={16} />{props.t("変更は自動で保存されます", "Changes are saved automatically")}</p>
+          </div>
+          <div className="rp-form-actions">
+            <button className="rp-primary-button" type="button" onClick={props.onBack}><Save size={20} />{props.t("保存する", "Save")}</button>
+            <button className="rp-secondary-button" type="button" onClick={props.onBack}>{props.t("キャンセル", "Cancel")}</button>
           </div>
         </section>
       )}
 
-      {section === "players" && (
-        <section className="rp-people-page">
-          <div className="rp-page-heading compact"><h1>{props.t("参加者設定", "Bettor settings")}</h1><p>{props.t("予想してベットする人を追加・編集", "Add and edit people who place bets")}</p></div>
+      {props.section === "people" && (
+        <section className="rp-people-page" id="bettors-settings">
+          <div className="rp-page-heading compact"><h1>{props.t("参加者設定", "Participant settings")}</h1><p>{props.t("ベッターと対戦者を追加・編集", "Add and edit bettors and racers")}</p></div>
           <div className="rp-people-card">
             <header><h2>{props.t("ベッター", "Bettors")}</h2><p>{props.t("予想してベットする人", "People making predictions")}</p></header>
             <div className="rp-person-list">
               {props.room.players.map((player) => (
                 <div className="rp-person-row" key={player.id}>
                   <IconSelect value={player.emoji} label={props.t(`${player.name}のアイコン`, `${player.name} icon`)} onChange={(emoji) => props.onPlayerEmojiChange(player.id, emoji)} />
-                  <span><strong>{player.name}</strong><small>{player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</small></span>
-                  <b>{currency.format(player.balance)}</b>
+                  <span><strong>{player.name}</strong></span>
                   <button className="rp-delete-icon" type="button" onClick={() => props.onDeletePlayer(player.id)} aria-label={props.t("削除", "Delete")}><Trash2 size={21} /></button>
                 </div>
               ))}
@@ -762,18 +781,11 @@ export function RankHostView(props: {
               </div>
             </details>
           </div>
-          <div className="rp-bonus-card">
-            <span><strong>{props.t("特別ボーナス", "Special bonus")}</strong><small>{props.t("順位ボーナスや救済を手動で付与", "Grant a manual reward or relief")}</small></span>
-            <select value={props.bonusPlayerId} onChange={(event) => props.setBonusPlayerId(event.target.value)}>{props.room.players.map((player) => <option value={player.id} key={player.id}>{player.name}</option>)}</select>
-            <input type="number" value={props.bonusAmount} onChange={(event) => props.setBonusAmount(Number(event.target.value))} />
-            <button type="button" onClick={props.onGrantBonus}><Plus size={18} />{props.t("付与", "Grant")}</button>
-          </div>
         </section>
       )}
 
-      {section === "contestants" && (
-        <section className="rp-people-page">
-          <div className="rp-page-heading compact"><h1>{props.t("対戦者設定", "Racer settings")}</h1><p>{props.t("レースに出る人・CPUを追加・編集", "Add and edit racers and CPUs")}</p></div>
+      {props.section === "people" && (
+        <section className="rp-people-page rp-people-contestants" id="contestants-settings">
           <div className="rp-people-card rp-contestant-card">
             <header><h2>{props.t("対戦者", "Racers")}</h2><p>{props.t("レースに参加する人・CPU", "People and CPUs in the race")}</p></header>
             <div className="rp-contestant-head"><span></span><span></span><span>CPU</span><span>{props.t("レベル", "Level")}</span><span>{props.t("オッズ", "Odds")}</span><span></span></div>
@@ -805,7 +817,11 @@ export function RankHostView(props: {
               </div>
             </details>
           </div>
-          <div className="rp-info-banner"><Info size={22} />{props.t("CPUレベルは1〜11。レベル変更時はオッズを自動調整します。", "CPU levels range from 1 to 11. Odds update with level changes.")}</div>
+          <div className="rp-info-banner"><Info size={22} />{props.t("ベッター＝予想してベットする人 ／ 対戦者＝レースに出る人・CPU", "Bettor = person placing a prediction / Racer = person or CPU in the race")}</div>
+          <div className="rp-form-actions">
+            <button className="rp-primary-button" type="button" onClick={props.onBack}><Save size={20} />{props.t("保存する", "Save")}</button>
+            <button className="rp-secondary-button" type="button" onClick={props.onBack}>{props.t("キャンセル", "Cancel")}</button>
+          </div>
         </section>
       )}
     </div>
@@ -816,13 +832,10 @@ function RankBadge(props: { rank: number }) {
   return <span className={`rp-rank-badge rank-${props.rank}`}>{props.rank}</span>;
 }
 
-function formatHistoryPick(room: Room, bet: RaceBetResult, historyContestants: NonNullable<Room["raceHistory"][number]["contestants"]>) {
-  return bet.contestantIds.map((id) => historyContestants.find((item) => item.id === id)?.name ?? getContestant(room, id)?.name ?? "-").join(" - ");
-}
-
 export function RankRankingView(props: {
   room: Room;
   ranking: Player[];
+  activePlayer?: Player;
   displayMode: ResultDisplayMode;
   setDisplayMode: (value: ResultDisplayMode) => void;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
@@ -838,8 +851,26 @@ export function RankRankingView(props: {
     ranking[2] ? { player: ranking[2], rank: 3 } : undefined,
   ].filter((entry): entry is { player: Player; rank: number } => Boolean(entry));
 
+  const activeRank = props.activePlayer
+    ? ranking.findIndex((player) => player.id === props.activePlayer?.id) + 1
+    : 0;
+
+  const activePayout = latest?.payouts.find((payout) => payout.playerId === props.activePlayer?.id);
+  const totalStake = latest?.payouts.reduce((sum, item) => sum + item.stake, 0) ?? 0;
+  const totalPayout = latest?.payouts.reduce((sum, item) => sum + item.payout, 0) ?? 0;
+  const totalDelta = latest?.payouts.reduce((sum, item) => sum + item.delta, 0) ?? 0;
+  const summaryStake = activePayout?.stake ?? totalStake;
+  const summaryPayout = activePayout?.payout ?? totalPayout;
+  const summaryDelta = activePayout?.delta ?? totalDelta;
+
   const shareResult = async () => {
-    const text = `${props.room.name}\n${ranking.map((player, index) => `${index + 1}. ${player.name} ${currency.format(player.balance)}`).join("\n")}`;
+    const resultText = latest
+      ? latest.resultIds.map((id, index) => {
+        const contestant = historyContestants.find((item) => item.id === id);
+        return `${index + 1}. ${contestant?.name ?? "-"}`;
+      }).join("\n")
+      : ranking.map((player, index) => `${index + 1}. ${player.name} ${currency.format(player.balance)}`).join("\n");
+    const text = `${props.room.name}\n${resultText}`;
     if (navigator.share) {
       await navigator.share({ title: props.room.name, text });
     } else {
@@ -847,103 +878,91 @@ export function RankRankingView(props: {
     }
   };
 
-  return (
-    <div className="rp-screen rp-ranking-screen">
-      <div className="rp-result-tabs">
-        <button className={props.displayMode === "ranking" ? "active" : ""} type="button" onClick={() => props.setDisplayMode("ranking")}>{props.t("ランキング", "Ranking")}</button>
-        <button className={props.displayMode === "payouts" ? "active" : ""} type="button" onClick={() => props.setDisplayMode("payouts")}>{props.t("払戻表", "Payouts")}</button>
-      </div>
-
-      {props.displayMode === "ranking" ? (
-        <>
-          <div className="rp-ranking-context">
-            <span><Trophy size={19} />{props.t(`第${Math.max(1, props.room.raceHistory.length)}レース時点`, `After race ${Math.max(1, props.room.raceHistory.length)}`)}</span>
-            <small>{props.room.currentRace.status === "settled" ? props.t("確定", "Settled") : props.t("リアルタイム更新", "Live update")}</small>
-          </div>
-          {ranking.length === 0 ? (
-            <section className="rp-empty-ranking"><Crown size={32} /><strong>{props.t("参加者待ちです", "Waiting for players")}</strong><p>{props.t("参加者が入るとランキングが表示されます", "Ranking appears when players join")}</p></section>
-          ) : (
-            <>
-              <section className="rp-podium">
-                {podium.map(({ player, rank }) => (
-                  <article className={`rp-podium-card rank-${rank}`} key={player.id}>
-                    <RankBadge rank={rank} />
-                    <span className="rp-podium-avatar" style={{ "--accent": player.accent } as CSSProperties}>{player.emoji}</span>
-                    <strong>{player.name}</strong>
-                    <em>{player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</em>
-                    <small>{props.t("獲得予想ポイント", "Current points")}</small>
-                    <b>{currency.format(player.balance)}<i>pt</i></b>
-                  </article>
-                ))}
-              </section>
-              <section className="rp-ranking-list">
-                <header><span>{props.t("順位", "Rank")}</span><span>{props.t("ユーザー", "User")}</span><span>{props.t("獲得予想ポイント", "Points")}</span></header>
-                {ranking.slice(3).map((player, index) => (
-                  <div className="rp-ranking-row" key={player.id}>
-                    <b>{index + 4}</b>
-                    <span className="rp-list-avatar" style={{ "--accent": player.accent } as CSSProperties}>{player.emoji}</span>
-                    <strong>{player.name}</strong>
-                    <em>{player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</em>
-                    <span>{currency.format(player.balance)} pt</span>
-                    <ChevronRight size={19} />
-                  </div>
-                ))}
-              </section>
-              <p className="rp-ranking-footer">{props.t("参加者", "Players")}：<b>{ranking.length}{props.t("人", "")}</b></p>
-            </>
-          )}
-        </>
-      ) : (
+  if (props.displayMode === "payouts") {
+    return (
+      <div className="rp-screen rp-results-page">
         <section className="rp-results-screen">
           <header className="rp-results-title">
             <button className="rp-icon-button" type="button" onClick={() => props.setDisplayMode("ranking")} aria-label={props.t("戻る", "Back")}><ArrowLeft size={24} /></button>
             <span><Flag size={21} /></span>
             <h1>{props.t("レース結果", "Race results")}</h1>
+            <button className="rp-results-detail" type="button" onClick={() => document.getElementById("race-odds")?.scrollIntoView({ behavior: "smooth" })}>{props.t("レース詳細", "Race details")}</button>
           </header>
+
           {latest ? (
             <>
               <div className="rp-race-summary">
-                <span><small>{props.t("レース", "Race")}</small><strong>{latest.raceTitle}</strong></span>
+                <span className="rp-race-summary-title">
+                  <small>{latest.raceTitle}</small>
+                  <strong>{props.room.name}</strong>
+                  <em>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(latest.settledAt)}</em>
+                </span>
                 <span><small>{props.t("参加人数", "Bettors")}</small><strong>{props.room.players.length}{props.t("人", "")}</strong></span>
-                <span><small>{props.t("総ベット", "Total stake")}</small><strong>{currency.format(latest.payouts.reduce((sum, item) => sum + item.stake, 0))}</strong></span>
-                <em>{props.t("確定", "Settled")}</em>
+                <span><small>{props.t("総ベット", "Total stake")}</small><strong>{currency.format(totalStake)}</strong></span>
+                <b>{props.t("確定", "Settled")}</b>
               </div>
+
               <div className="rp-finish-order">
                 {latest.resultIds.slice(0, 3).map((id, index) => {
                   const contestant = historyContestants.find((item) => item.id === id);
                   return (
-                    <div key={id}><RankBadge rank={index + 1} /><b>{index + 1}{props.t("着", "")}</b><span className="rp-lane-number" style={{ "--lane": contestant?.accent ?? "#ffbe00" } as CSSProperties}>{historyContestants.findIndex((item) => item.id === id) + 1}</span><strong>{contestant?.name ?? "-"}</strong><em>{contestant?.odds.toFixed(2)}x</em></div>
+                    <div key={id}>
+                      <RankBadge rank={index + 1} />
+                      <b>{index + 1}{props.t("着", "")}</b>
+                      <span className="rp-lane-number" style={{ "--lane": contestant?.accent ?? "#ffbe00" } as CSSProperties}>{historyContestants.findIndex((item) => item.id === id) + 1}</span>
+                      <strong>{contestant?.name ?? "-"}</strong>
+                      <em>{contestant?.odds.toFixed(2)}x</em>
+                    </div>
                   );
                 })}
               </div>
-              <div className="rp-odds-strip">
+
+              <div className="rp-odds-strip" id="race-odds">
                 <strong>{props.t("今回のオッズ", "Odds")}</strong>
-                {historyContestants.map((contestant, index) => <span key={contestant.id}><b style={{ "--lane": contestant.accent } as CSSProperties}>{index + 1}</b><small>{contestant.odds.toFixed(2)}</small></span>)}
+                <div>
+                  {historyContestants.map((contestant, index) => (
+                    <span key={contestant.id}>
+                      <b style={{ "--lane": contestant.accent } as CSSProperties}>{index + 1}</b>
+                      <small>{contestant.odds.toFixed(2)}</small>
+                    </span>
+                  ))}
+                </div>
               </div>
+
               <div className="rp-bet-result-tabs"><strong>{props.t("ベット一覧", "Bet list")}</strong><span>{props.t("払戻し詳細", "Payout details")}</span></div>
               <div className="rp-result-table">
                 <header><span>{props.t("プレイヤー", "Player")}</span><span>{props.t("ベット内容", "Ticket")}</span><span>{props.t("結果", "Result")}</span><span>{props.t("払戻", "Payout")}</span><span>{props.t("収支", "Delta")}</span></header>
                 {(latest.bets ?? []).length === 0 ? (
                   <p>{props.t("このレースのベットはありません", "No bets in this race")}</p>
-                ) : (latest.bets ?? []).map((bet, index) => {
+                ) : (latest.bets ?? []).map((bet) => {
                   const player = props.room.players.find((item) => item.id === bet.playerId);
                   return (
                     <div className={bet.hit ? "hit" : "miss"} key={bet.id}>
-                      <RankBadge rank={Math.min(9, index + 1)} />
-                      <span className="rp-list-avatar" style={{ "--accent": player?.accent ?? "#ddd" } as CSSProperties}>{player?.emoji ?? "?"}</span>
-                      <span className="rp-result-player"><strong>{player?.name ?? "-"}</strong><small>{bet.placedBy === "host" ? props.t("代行", "Proxy") : props.t("本人", "Self")}</small></span>
-                      <span className="rp-result-pick"><strong>{formatHistoryPick(props.room, bet, historyContestants)}</strong><small>{props.betTypeLabels[bet.type].title} / {currency.format(bet.amount)}</small></span>
+                      <span className="rp-result-player-cell">
+                        <span className="rp-list-avatar" style={{ "--accent": player?.accent ?? "#ddd" } as CSSProperties}>{player?.emoji ?? "?"}</span>
+                        <span><strong>{player?.name ?? "-"}</strong><small>{bet.placedBy === "host" ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</small></span>
+                      </span>
+                      <span className="rp-result-ticket-cell">
+                        <strong>{bet.contestantIds.map((id, index) => {
+                          const lane = historyContestants.findIndex((item) => item.id === id);
+                          const contestant = historyContestants[lane];
+                          return <i key={`${id}-${index}`} style={{ "--lane": contestant?.accent ?? "#444" } as CSSProperties}>{lane + 1}</i>;
+                        })}</strong>
+                        <small>{props.betTypeLabels[bet.type].title} / {currency.format(bet.amount)}</small>
+                      </span>
                       <span className="rp-hit-label">{bet.hit ? props.t("○ 的中", "Hit") : props.t("× 不的中", "Miss")}</span>
                       <span>{currency.format(bet.payout)}</span>
-                      <b>{bet.delta >= 0 ? "+" : ""}{currency.format(bet.delta)}</b>
+                      <b className={bet.delta >= 0 ? "positive" : "negative"}>{bet.delta >= 0 ? "+" : ""}{currency.format(bet.delta)}</b>
                     </div>
                   );
                 })}
               </div>
+
+              <p className="rp-result-note">{props.t("払戻しは確定時のオッズで計算されます", "Payouts use the odds locked at placement")}</p>
               <div className="rp-payout-total">
-                <span><small>{props.t("総ベット", "Stake")}</small><strong>{currency.format(latest.payouts.reduce((sum, item) => sum + item.stake, 0))}</strong></span>
-                <span><small>{props.t("払戻", "Payout")}</small><strong>{currency.format(latest.payouts.reduce((sum, item) => sum + item.payout, 0))}</strong></span>
-                <span><small>{props.t("収支", "Delta")}</small><strong>{currency.format(latest.payouts.reduce((sum, item) => sum + item.delta, 0))}</strong></span>
+                <span><small>{props.activePlayer ? props.t("あなたのベット", "Your stake") : props.t("総ベット", "Stake")}</small><strong>{currency.format(summaryStake)}</strong></span>
+                <span><small>{props.t("払戻", "Payout")}</small><strong>{currency.format(summaryPayout)}</strong></span>
+                <span><small>{props.t("収支", "Delta")}</small><strong className={summaryDelta >= 0 ? "positive" : "negative"}>{summaryDelta >= 0 ? "+" : ""}{currency.format(summaryDelta)}</strong></span>
               </div>
               <div className="rp-result-actions">
                 <button className="rp-secondary-button" type="button" onClick={shareResult}><Share2 size={19} />{props.t("結果をシェア", "Share results")}</button>
@@ -954,6 +973,54 @@ export function RankRankingView(props: {
             <div className="rp-empty-ranking"><Medal size={30} /><strong>{props.t("確定した結果はまだありません", "No settled result yet")}</strong><p>{props.t("結果を確定すると、払戻しと投票結果がここに表示されます", "Settle a race to see payouts and tickets")}</p></div>
           )}
         </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rp-screen rp-ranking-screen">
+      <div className="rp-result-tabs">
+        <button className="active" type="button">{props.t("ランキング", "Ranking")}</button>
+        <button type="button" onClick={() => props.setDisplayMode("payouts")}>{props.t("払戻表", "Payouts")}</button>
+      </div>
+      <div className="rp-ranking-context">
+        <span><Trophy size={19} />{props.t(`第${Math.max(1, props.room.raceHistory.length)}レース時点`, `After race ${Math.max(1, props.room.raceHistory.length)}`)}</span>
+        <small>{props.room.currentRace.status === "settled" ? props.t("確定", "Settled") : props.t("リアルタイム更新", "Live update")}</small>
+      </div>
+      {ranking.length === 0 ? (
+        <section className="rp-empty-ranking"><Crown size={32} /><strong>{props.t("参加者待ちです", "Waiting for players")}</strong><p>{props.t("参加者が入るとランキングが表示されます", "Ranking appears when players join")}</p></section>
+      ) : (
+        <>
+          <section className="rp-podium">
+            {podium.map(({ player, rank }) => (
+              <article className={`rp-podium-card rank-${rank}`} key={player.id}>
+                <RankBadge rank={rank} />
+                <span className="rp-podium-avatar" style={{ "--accent": player.accent } as CSSProperties}>{player.emoji}</span>
+                <strong>{player.name}</strong>
+                <em className={player.isOffline ? "proxy" : "self"}>{player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</em>
+                <small>{props.t("獲得予想ポイント", "Current points")}</small>
+                <b>{currency.format(player.balance)}<i>pt</i></b>
+              </article>
+            ))}
+          </section>
+          <section className="rp-ranking-list">
+            <header><span>{props.t("順位", "Rank")}</span><span>{props.t("ユーザー", "User")}</span><span>{props.t("獲得予想ポイント", "Points")}</span></header>
+            {ranking.slice(3, 10).map((player, index) => (
+              <div className="rp-ranking-row" key={player.id}>
+                <b>{index + 4}</b>
+                <span className="rp-list-avatar" style={{ "--accent": player.accent } as CSSProperties}>{player.emoji}</span>
+                <strong>{player.name}</strong>
+                <em className={player.isOffline ? "proxy" : "self"}>{player.isOffline ? props.t("代行参加", "Proxy") : props.t("本人参加", "Self")}</em>
+                <span>{currency.format(player.balance)} pt</span>
+                <ChevronRight size={19} />
+              </div>
+            ))}
+          </section>
+          <p className="rp-ranking-footer">
+            {props.activePlayer ? <>{props.t("あなたの順位", "Your rank")}：<b>{activeRank}{props.t("位", "")}</b><i>/</i></> : null}
+            {props.t("参加者", "Players")}：<b>{ranking.length}{props.t("人", "")}</b>
+          </p>
+        </>
       )}
     </div>
   );

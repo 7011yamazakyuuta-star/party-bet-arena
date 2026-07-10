@@ -10,10 +10,10 @@ export const defaultPlayers: Player[] = [
 ];
 
 export const defaultContestants: Contestant[] = [
-  { id: "c-player", name: "Player", odds: 1.4, accent: "#ff4c69", icon: "👑", strengthRating: 9, cpuLevel: 9, isCpu: false },
-  { id: "c-cpu1", name: "CPU1", odds: 1.8, accent: "#3568ff", icon: "🤖", strengthRating: 8, cpuLevel: 9, isCpu: true },
-  { id: "c-cpu2", name: "CPU2", odds: 2.3, accent: "#f2c114", icon: "⚡", strengthRating: 7, cpuLevel: 8, isCpu: true },
-  { id: "c-cpu3", name: "CPU3", odds: 3.1, accent: "#25bf45", icon: "🍀", strengthRating: 6, cpuLevel: 7, isCpu: true },
+  { id: "c-player", name: "Player", odds: 1.4, accent: "#ff4c69", icon: "👑", cpuLevel: 9, isCpu: false },
+  { id: "c-cpu1", name: "CPU1", odds: 1.8, accent: "#3568ff", icon: "🤖", cpuLevel: 9, isCpu: true },
+  { id: "c-cpu2", name: "CPU2", odds: 2.3, accent: "#f2c114", icon: "⚡", cpuLevel: 8, isCpu: true },
+  { id: "c-cpu3", name: "CPU3", odds: 3.1, accent: "#25bf45", icon: "🍀", cpuLevel: 7, isCpu: true },
 ];
 
 export const createInitialRoom = (): Room => ({
@@ -23,7 +23,6 @@ export const createInitialRoom = (): Room => ({
   joinCode: "2468",
   hostPin: "0000",
   theme: "arena",
-  uiMode: "smart",
   startingBalance: 1000,
   settings: {
     maxPlayers: 8,

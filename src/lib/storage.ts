@@ -1,5 +1,5 @@
 import { createInitialRoom } from "./sample";
-import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName, UiModeName } from "./types";
+import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
 const sessionKey = "party-bet-arena:session";
@@ -23,8 +23,7 @@ export type LocalRoomSummary = {
   updatedAt: number;
 };
 
-const validThemes = new Set<ThemeName>(["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
-const validUiModes = new Set<UiModeName>(["smart"]);
+const validThemes = new Set<ThemeName>(["arena", "neon"]);
 const fallbackEmojis = ["🎮", "😎", "🌟", "🚗", "🎲", "🔥", "🍀", "🏆"];
 const fallbackContestantIcons = ["👑", "🤖", "⚡", "🍀", "🚀", "🎯", "💎", "⭐"];
 const legacyContestantIcons: Record<string, string> = {
@@ -168,13 +167,14 @@ export function resetLocalRoom() {
 
 export function normalizeRoom(room: Room): Room {
   const fallback = createInitialRoom();
+  const cleanRoom = { ...room } as Room & { uiMode?: unknown };
+  delete cleanRoom.uiMode;
 
   return {
     ...fallback,
-    ...room,
+    ...cleanRoom,
     isDemo: room.isDemo ?? room.id === "DEMO42",
     theme: validThemes.has(room.theme) ? room.theme : fallback.theme,
-    uiMode: validUiModes.has((room as Partial<Room>).uiMode as UiModeName) ? ((room as Partial<Room>).uiMode as UiModeName) : fallback.uiMode,
     settings: {
       ...fallback.settings,
       ...room.settings,
@@ -192,13 +192,16 @@ export function normalizeRoom(room: Room): Room {
         emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
       };
     }),
-    contestants: normalizeList((room as unknown as { contestants?: unknown }).contestants, fallback.contestants).map((contestant, index) => ({
-      ...contestant,
-      icon: normalizeIcon(contestant.icon, index),
-      strengthRating: contestant.strengthRating ?? Math.max(1, 9 - index),
-      cpuLevel: contestant.cpuLevel ?? Math.max(1, 9 - index),
-      isCpu: contestant.isCpu ?? index > 0,
-    })),
+    contestants: normalizeList((room as unknown as { contestants?: unknown }).contestants, fallback.contestants).map((contestant, index) => {
+      const cleanContestant = { ...contestant } as typeof contestant & { strengthRating?: unknown };
+      delete cleanContestant.strengthRating;
+      return {
+        ...cleanContestant,
+        icon: normalizeIcon(contestant.icon, index),
+        cpuLevel: contestant.cpuLevel ?? Math.max(1, 9 - index),
+        isCpu: contestant.isCpu ?? index > 0,
+      };
+    }),
     currentRace: {
       ...fallback.currentRace,
       ...room.currentRace,
