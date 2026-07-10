@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
+  ArrowLeft,
   BarChart3,
+  Bell,
   Check,
   ChevronRight,
   CircleDollarSign,
   Crown,
+  Flag,
   Gamepad2,
   Home,
+  LogIn,
   Lock,
   Medal,
   Minus,
@@ -20,7 +24,6 @@ import {
   Trophy,
   UserPlus,
   Users,
-  Wallet,
   Zap,
 } from "lucide-react";
 import {
@@ -68,6 +71,16 @@ import {
 } from "./lib/storage";
 import type { LocalRoomSummary } from "./lib/storage";
 import type { BetType, DraftBet, LanguageName, Player, RaceBetResult, Room, ThemeName, UiModeName } from "./lib/types";
+import {
+  RankBetView,
+  RankBottomNav,
+  RankHomeView,
+  RankHostView,
+  RankJoinPanel,
+  RankLaunchView,
+  RankRankingView,
+  RankRoomHeader,
+} from "./RankPartyViews";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
@@ -75,8 +88,8 @@ type BetDisplayMode = "cards" | "board";
 type ResultDisplayMode = "ranking" | "payouts";
 type HostSection = "progress" | "settings" | "players" | "contestants";
 
-const themeOrder: ThemeName[] = ["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"];
-const uiModeOrder: UiModeName[] = ["smart", "classic"];
+const themeOrder: ThemeName[] = ["arena", "neon"];
+const uiModeOrder: UiModeName[] = ["smart"];
 const emojiChoices = [
   "😀",
   "😎",
@@ -106,12 +119,12 @@ const emojiChoices = [
 
 function getThemeCopy(t: Translate): Record<ThemeName, { label: string; note: string }> {
   return {
-    arena: { label: t("アリーナ", "Arena"), note: t("見やすさ重視の新デザイン", "New polished default") },
-    party: { label: t("クラシック", "Classic"), note: t("今までの標準デザイン", "Original default look") },
+    arena: { label: t("ライト", "Light"), note: t("白と黄色の標準デザイン", "White and yellow default") },
+    party: { label: t("ライト補助", "Light alt"), note: t("白と黄色に合わせた補助テーマ", "Fallback light treatment") },
     garden: { label: t("ガーデン", "Garden"), note: t("緑と白の落ち着いた遊び場", "Soft green and calm") },
     candy: { label: t("キャンディ", "Candy"), note: t("少しポップでにぎやか", "Playful and colorful") },
     sky: { label: t("スカイ", "Sky"), note: t("青空っぽく見やすい", "Clear and airy") },
-    neon: { label: t("ネオン", "Neon"), note: t("暗めでゲーミング感", "Dark gaming glow") },
+    neon: { label: t("ダーク", "Dark"), note: t("黒と黄色のプレミアム表示", "Black and yellow premium") },
     pop: { label: t("ポップ", "Pop"), note: t("濃いめのイベント感", "Vivid event mood") },
     minimal: { label: t("ミニマル", "Minimal"), note: t("控えめで読みやすい", "Quiet and readable") },
   };
@@ -123,11 +136,6 @@ function getUiModeCopy(t: Translate): Record<UiModeName, { label: string; note: 
       label: t("スマートUI", "Smart UI"),
       note: t("次にやることを先に出す、初見向けの整理表示", "Guided layout that surfaces the next action first"),
       tag: t("おすすめ", "Recommended"),
-    },
-    classic: {
-      label: t("クラシックUI", "Classic UI"),
-      note: t("これまでの画面構成に戻す表示", "Keeps the previous screen structure"),
-      tag: t("従来", "Original"),
     },
   };
 }
@@ -269,15 +277,6 @@ function translateText(language: LanguageName, ja: string, en: string) {
   return languageDictionary[language]?.[en] ?? en;
 }
 
-function formatTime(milliseconds: number) {
-  const total = Math.max(0, Math.floor(milliseconds / 1000));
-  const minutes = Math.floor(total / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (total % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
-
 function translateBetError(error: string, t: Translate) {
   const messages: Record<string, string> = {
     "BET受付中ではありません。": "Betting is closed.",
@@ -353,7 +352,6 @@ function App() {
   const [resultIds, setResultIds] = useState<string[]>(room.currentRace.resultIds);
   const [toast, setToast] = useState("");
   const [syncIssue, setSyncIssue] = useState("");
-  const [tick, setTick] = useState(Date.now());
   const language = session.language ?? "ja";
   const t: Translate = (ja, en) => translateText(language, ja, en);
   const betTypeLabels = useMemo(() => getBetTypeCopy(t), [language]);
@@ -373,12 +371,6 @@ function App() {
   }, [language]);
 
   useEffect(() => {
-    if (room.isDemo) return;
-    const timer = window.setInterval(() => setTick(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [room.isDemo]);
-
-  useEffect(() => {
     saveSession(session);
   }, [session]);
 
@@ -396,6 +388,12 @@ function App() {
       setProxyPlayerId("");
     }
   }, [proxyPlayerId, room.players, session.role]);
+
+  useEffect(() => {
+    const frame = document.querySelector<HTMLElement>(".phone-frame");
+    window.scrollTo({ top: 0, behavior: "auto" });
+    frame?.scrollTo({ top: 0, behavior: "auto" });
+  }, [showLauncher, tab, room.id, room.currentRace.id]);
 
   useEffect(() => {
     if (!room.players.length) return;
@@ -443,12 +441,10 @@ function App() {
     placedBy: session.role === "host" ? "host" : "self",
   };
   const potentialPayout = getPotentialPayout(room, draftBet);
-  const elapsedTime = formatTime(tick - room.currentRace.startedAt);
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
   const placedPlayerCount = new Set(room.currentRace.bets.map((bet) => bet.playerId)).size;
   const allPlayersPlaced = room.players.length > 0 && placedPlayerCount >= room.players.length;
   const isLaunchScreen = showLauncher;
-  const displayRoomName = room.isDemo ? t("みんなBET", "Party Bet Arena") : room.name.trim() || t("名前を入力中", "Editing name");
   const publicUrl = typeof window === "undefined" ? "" : window.location.origin + window.location.pathname;
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
@@ -500,6 +496,7 @@ function App() {
     commitRoom(next);
     setSession((current) => ({ ...current, role: "host", playerId: undefined }));
     setShowLauncher(false);
+    setTab("host");
     setProxyPlayerId("");
     setSelectedContestantId(next.contestants[0]?.id ?? "");
     setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
@@ -681,7 +678,7 @@ function App() {
   }
 
   async function handleCopyInvite() {
-    const text = `Party Bet Arena\nURL: ${publicUrl}\n${t("ルームID", "Room ID")}: ${room.id}\n${t("参加コード", "Join code")}: ${room.joinCode}`;
+    const text = `ランクパーティ\nURL: ${publicUrl}\n${t("ルームID", "Room ID")}: ${room.id}\n${t("参加コード", "Join code")}: ${room.joinCode}`;
     try {
       await navigator.clipboard.writeText(text);
       showToast(t("招待情報をコピーしました。", "Invite copied."));
@@ -841,6 +838,40 @@ function App() {
     setNewContestantCpuLevel(7);
     setNewContestantEmoji(emojiChoices[(room.contestants.length + 3) % emojiChoices.length]);
     showToast(t("勝負するプレイヤーを追加しました。", "Contestant added."));
+  }
+
+  function handleDeleteContestant(contestantId: string) {
+    const contestant = room.contestants.find((item) => item.id === contestantId);
+    if (!contestant || room.contestants.length <= 1) {
+      showToast(t("対戦者は1人以上必要です。", "At least one contestant is required."));
+      return;
+    }
+    const confirmed = window.confirm(
+      t(
+        `${contestant.name}を対戦者から削除しますか？このレースの関連ベットも削除されます。`,
+        `Remove ${contestant.name}? Related bets in this race will also be removed.`,
+      ),
+    );
+    if (!confirmed) return;
+
+    updateRoom((current) => {
+      const contestants = current.contestants.filter((item) => item.id !== contestantId);
+      return {
+        ...current,
+        contestants: current.settings.autoOdds ? calculateAutoOdds(contestants) : contestants,
+        currentRace: {
+          ...current.currentRace,
+          bets: current.currentRace.bets.filter((bet) => !getBetPickIds(bet).includes(contestantId)),
+          resultIds: current.currentRace.resultIds.filter((id) => id !== contestantId),
+        },
+        updatedAt: Date.now(),
+      };
+    });
+    setSelectedPickIds((current) => current.filter((id) => id !== contestantId));
+    if (selectedContestantId === contestantId) {
+      setSelectedContestantId(room.contestants.find((item) => item.id !== contestantId)?.id ?? "");
+    }
+    showToast(t(`${contestant.name}を削除しました。`, `${contestant.name} removed.`));
   }
 
   function handleOddsChange(contestantId: string, odds: number) {
@@ -1036,13 +1067,13 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className={isLaunchScreen ? "phone-frame launch-frame" : "phone-frame"} aria-label="Party Bet Arena">
+      <section className={isLaunchScreen ? "phone-frame launch-frame" : `phone-frame app-view app-view-${tab}`} aria-label="ランクパーティ">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
 
         {isLaunchScreen ? (
           <>
-            <LaunchView
+            <RankLaunchView
               joinName={joinName}
               setJoinName={setJoinName}
               joinRoomId={joinRoomId}
@@ -1068,56 +1099,19 @@ function App() {
           </>
         ) : (
           <>
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Party Bet Arena</p>
-            <h1>{displayRoomName}</h1>
-          </div>
-          <div className="top-actions">
-            <button className="pill-button tertiary-button" type="button" onClick={handleHostMode}>
-              <Crown size={18} />
-              {t("幹事", "Host")}
-            </button>
-            <select
-              className="language-select"
-              value={language}
-              onChange={(event) => handleLanguageChange(event.target.value as LanguageName)}
-              aria-label={t("言語を選択", "Choose language")}
-            >
-              {languageOptions.map((option) => (
-                <option value={option.value} key={option.value}>
-                  {option.short} {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              className="pill-button tertiary-button guest-mode-button"
-              type="button"
-              aria-label={t("友だちとして参加", "Join as player")}
-              onClick={() => setSession((current) => ({ ...current, role: "player", playerId: currentPlayer?.id }))}
-            >
-              <UserPlus size={18} />
-              <span>{t("参加", "Join")}</span>
-            </button>
-          </div>
-        </header>
-
-        <section className={room.isDemo && tab === "home" ? "status-strip status-hidden" : "status-strip"}>
-          <div>
-            <span>{t("ルーム", "Room")}</span>
-            <strong>{room.id}</strong>
-          </div>
-          <div>
-            <span>{t("コード", "Code")}</span>
-            <strong>{room.joinCode}</strong>
-          </div>
-          <div>
-            <span>{room.isDemo ? t("表示", "Mode") : isFirebaseConfigured ? t("同期", "Sync") : t("保存先", "Storage")}</span>
-            <strong className={isFirebaseConfigured ? "online" : ""}>
-              {room.isDemo ? t("デモ", "Demo") : isFirebaseConfigured ? "Firebase" : t("端末内", "Local")}
-            </strong>
-          </div>
-        </section>
+        {!(session.role === "player" && !currentPlayer) && (
+          <RankRoomHeader
+            tab={tab}
+            room={room}
+            sessionRole={session.role}
+            activePlayer={activePlayer}
+            currentRaceNumber={currentRaceNumber}
+            t={t}
+            onBack={() => setShowLauncher(true)}
+            onHostMode={handleHostMode}
+            onJoinMode={handleJoinMode}
+          />
+        )}
 
         {syncIssue && !room.isDemo && (
           <section className="sync-alert" role="status">
@@ -1130,7 +1124,7 @@ function App() {
         )}
 
         {session.role === "player" && !currentPlayer ? (
-          <JoinPanel
+          <RankJoinPanel
             joinName={joinName}
             setJoinName={setJoinName}
             joinRoomId={joinRoomId}
@@ -1143,10 +1137,9 @@ function App() {
         ) : (
           <>
             {tab === "home" && (
-              <HomeView
+              <RankHomeView
                 room={room}
                 ranking={ranking}
-                elapsedTime={elapsedTime}
                 currentRaceNumber={currentRaceNumber}
                 hasJackpot={hasJackpot}
                 publicUrl={publicUrl}
@@ -1164,7 +1157,7 @@ function App() {
             )}
 
             {tab === "bet" && (
-              <BetView
+              <RankBetView
                 room={room}
                 sessionRole={session.role}
                 activePlayer={activePlayer}
@@ -1182,7 +1175,6 @@ function App() {
                 potentialPayout={potentialPayout}
                 displayMode={betDisplayMode}
                 setDisplayMode={setBetDisplayMode}
-                elapsedTime={elapsedTime}
                 currentRaceNumber={currentRaceNumber}
                 placedPlayerCount={placedPlayerCount}
                 allPlayersPlaced={allPlayersPlaced}
@@ -1194,7 +1186,7 @@ function App() {
             )}
 
             {tab === "host" && (
-              <HostView
+              <RankHostView
                 room={room}
                 newPlayerName={newPlayerName}
                 setNewPlayerName={setNewPlayerName}
@@ -1220,7 +1212,6 @@ function App() {
                 themeCopy={themeCopy}
                 uiModeCopy={uiModeCopy}
                 betTypeLabels={betTypeLabels}
-                elapsedTime={elapsedTime}
                 currentRaceNumber={currentRaceNumber}
                 placedPlayerCount={placedPlayerCount}
                 allPlayersPlaced={allPlayersPlaced}
@@ -1228,6 +1219,7 @@ function App() {
                 onAddPlayer={handleAddPlayer}
                 onDeletePlayer={handleDeletePlayer}
                 onAddContestant={handleAddContestant}
+                onDeleteContestant={handleDeleteContestant}
                 onOddsChange={handleOddsChange}
                 onThemeChange={handleThemeChange}
                 onUiModeChange={handleUiModeChange}
@@ -1245,12 +1237,13 @@ function App() {
             )}
 
             {tab === "ranking" && (
-              <RankingView
+              <RankRankingView
                 room={room}
                 ranking={ranking}
                 displayMode={resultDisplayMode}
                 setDisplayMode={setResultDisplayMode}
                 betTypeLabels={betTypeLabels}
+                onNextRace={handleNextRace}
                 t={t}
               />
             )}
@@ -1263,11 +1256,80 @@ function App() {
           </div>
         )}
 
-        <BottomNav active={tab} role={session.role} onChange={setTab} t={t} />
+        {!(tab === "ranking" && resultDisplayMode === "payouts") && (
+          <RankBottomNav active={tab} role={session.role} onChange={setTab} t={t} />
+        )}
           </>
         )}
       </section>
     </main>
+  );
+}
+
+function RoomHeader(props: {
+  tab: TabKey;
+  room: Room;
+  sessionRole: "host" | "player";
+  activePlayer?: Player;
+  currentRaceNumber: number;
+  t: Translate;
+  onBack: () => void;
+  onHostMode: () => void;
+  onJoinMode: () => void;
+}) {
+  const balance = props.activePlayer ? currency.format(props.activePlayer.balance) : currency.format(props.room.players[0]?.balance ?? props.room.startingBalance);
+  const isHostRoom = props.tab === "home" || props.tab === "host";
+  const isBet = props.tab === "bet";
+  const isRanking = props.tab === "ranking";
+
+  return (
+    <header className={`room-header room-header-${props.tab}`}>
+      {isHostRoom ? (
+        <>
+          <div className="room-brand">
+            <span className="brand-mark">
+              <Crown size={26} />
+            </span>
+            <div>
+              <h1>{props.t("ホストルーム", "Host Room")}</h1>
+              <p>{props.room.name || props.t("ルーム", "Room")}</p>
+            </div>
+          </div>
+          <span className="status-pill" role="status">
+            <span />
+            {props.t("進行中", "Live")}
+          </span>
+        </>
+      ) : (
+        <>
+          <button className="back-button" type="button" onClick={props.onBack} aria-label={props.t("戻る", "Back")}>
+            <ArrowLeft size={24} />
+          </button>
+          <div className="screen-title">
+            <span className="screen-icon">
+              {isBet ? <span className="emoji-screen-icon" aria-hidden="true">🐎</span> : <Crown size={23} />}
+            </span>
+            <h1>{isBet ? props.t("ベット", "Bet") : props.t("ランクパーティ", "Rank Party")}</h1>
+          </div>
+          <div className="header-balance" aria-label={props.t("残高", "Balance")}>
+            <span>{props.t("残高", "Balance")}</span>
+            <strong>{balance}</strong>
+            {isRanking ? <Bell size={22} /> : <button type="button" onClick={props.sessionRole === "host" ? props.onHostMode : props.onJoinMode}>+</button>}
+          </div>
+        </>
+      )}
+      {isHostRoom && (
+        <div className="room-header-progress" aria-label={props.t("現在のレース", "Current race")}>
+          <span>{props.t("現在のレース", "Current race")}</span>
+          <strong>
+            {props.t("第", "Race ")}
+            <b>{props.currentRaceNumber}</b>
+            /{props.room.settings.maxRaces}
+            {props.t(" レース", "")}
+          </strong>
+        </div>
+      )}
+    </header>
   );
 }
 
@@ -1289,14 +1351,34 @@ function LaunchView(props: {
   onDeleteRoom: (roomId: string) => void;
 }) {
   const canJoin = props.joinRoomId.trim().length > 0 && props.joinCode.trim().length > 0;
+  const [isJoinPage, setIsJoinPage] = useState(false);
+
+  if (isJoinPage) {
+    return (
+      <JoinEntryScreen
+        joinName={props.joinName}
+        setJoinName={props.setJoinName}
+        joinRoomId={props.joinRoomId}
+        setJoinRoomId={props.setJoinRoomId}
+        joinCode={props.joinCode}
+        setJoinCode={props.setJoinCode}
+        language={props.language}
+        onLanguageChange={props.onLanguageChange}
+        roomSummaries={props.roomSummaries}
+        canJoin={canJoin}
+        t={props.t}
+        onBack={() => setIsJoinPage(false)}
+        onJoin={props.onJoin}
+        onOpenRoom={props.onOpenRoom}
+      />
+    );
+  }
 
   return (
     <div className="launch-screen">
       <header className="launch-header">
         <div>
-          <p className="eyebrow">Party Bet Arena</p>
-          <h1>{props.t("予想ゲームを、すぐ始める", "Start a prediction game fast")}</h1>
-          <p>{props.t("幹事がルームを作り、友だちはコードで参加します。デモ画面は表示せず、入室後に必要な操作だけ案内します。", "The host creates a room, friends join with a code, and each screen guides only the next needed action.")}</p>
+          <h1>{props.t("さあ、\n始めよう。", "Let's get started.")}</h1>
         </div>
         <select
           className="language-select launch-language"
@@ -1315,73 +1397,26 @@ function LaunchView(props: {
       <section className="launch-actions" aria-label={props.t("はじめる", "Get started")}>
         <button className="launch-create-card primary-button" type="button" onClick={props.onCreateRoom}>
           <span>
-            <Crown size={24} />
+            <Plus size={40} />
           </span>
           <strong>{props.t("ルームを作る", "Create room")}</strong>
-          <em>{props.t("幹事として開始", "Start as host")}</em>
+          <em>{props.t("新しいルームを作成してゲームを始めましょう", "Create a new room and start the game")}</em>
           <ChevronRight size={24} />
         </button>
 
-        <form
-          className="launch-join-card"
-          onSubmit={(event) => {
-            event.preventDefault();
-            props.onJoin();
-          }}
-        >
+        <button className="launch-join-card" type="button" onClick={() => setIsJoinPage(true)}>
           <div className="section-heading">
-            <Users size={20} />
+            <span className="join-card-icon">
+              <LogIn size={34} />
+            </span>
             <div>
               <h2>{props.t("ルームに参加", "Join room")}</h2>
-              <p>{props.t("幹事から届いたIDと参加コードを入力", "Enter the ID and join code from the host")}</p>
+              <p>{props.t("招待コードを入力してルームに参加します", "Enter the invitation code and join")}</p>
             </div>
+            <ChevronRight size={24} />
           </div>
-          <label>
-            {props.t("表示名", "Display name")}
-            <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder={props.t("例: ゆうた", "Example: Yuta")} />
-          </label>
-          <div className="launch-code-grid">
-            <label>
-              {props.t("ルームID", "Room ID")}
-              <input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value.toUpperCase())} placeholder="AB12CD" />
-            </label>
-            <label>
-              {props.t("参加コード", "Join code")}
-              <input inputMode="numeric" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value)} placeholder="2468" />
-            </label>
-          </div>
-          <button className="secondary-button full" type="submit" disabled={!canJoin}>
-            <UserPlus size={19} />
-            {props.t("参加する", "Join")}
-          </button>
-        </form>
+        </button>
       </section>
-
-      <section className="launch-flow-card" aria-label={props.t("流れ", "Flow")}>
-        <div>
-          <span>1</span>
-          <strong>{props.t("部屋を作る", "Create")}</strong>
-        </div>
-        <ChevronRight size={16} />
-        <div>
-          <span>2</span>
-          <strong>{props.t("友だちが入る", "Join")}</strong>
-        </div>
-        <ChevronRight size={16} />
-        <div>
-          <span>3</span>
-          <strong>{props.t("画面に従う", "Follow")}</strong>
-        </div>
-      </section>
-
-      <div className="launch-sync-note">
-        <Radio size={17} />
-        <span>
-          {props.firebaseReady
-            ? props.t("オンライン同期は有効です。各スマホから同じルームに参加できます。", "Online sync is ready. Phones can join the same room.")
-            : props.t("Firebase未設定時は端末内のみで動きます。公開利用前に同期設定を確認してください。", "Without Firebase, the app works locally only. Check sync setup before public use.")}
-        </span>
-      </div>
 
       {props.roomSummaries.length > 0 && (
         <details className="launcher-saved">
@@ -1416,6 +1451,90 @@ function LaunchView(props: {
             })}
           </div>
         </details>
+      )}
+    </div>
+  );
+}
+
+function JoinEntryScreen(props: {
+  joinName: string;
+  setJoinName: (value: string) => void;
+  joinRoomId: string;
+  setJoinRoomId: (value: string) => void;
+  joinCode: string;
+  setJoinCode: (value: string) => void;
+  language: LanguageName;
+  onLanguageChange: (value: LanguageName) => void;
+  roomSummaries: LocalRoomSummary[];
+  canJoin: boolean;
+  t: Translate;
+  onBack: () => void;
+  onJoin: () => void;
+  onOpenRoom: (roomId: string) => void;
+}) {
+  useEffect(() => {
+    const frame = document.querySelector<HTMLElement>(".phone-frame");
+    window.scrollTo({ top: 0, behavior: "auto" });
+    frame?.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  return (
+    <div className="join-entry-screen">
+      <header className="join-entry-header">
+        <button className="back-button" type="button" onClick={props.onBack} aria-label={props.t("戻る", "Back")}>
+          <ArrowLeft size={26} />
+        </button>
+        <select
+          className="language-select join-language"
+          value={props.language}
+          onChange={(event) => props.onLanguageChange(event.target.value as LanguageName)}
+          aria-label={props.t("言語を選ぶ", "Choose language")}
+        >
+          {languageOptions.map((option) => (
+            <option value={option.value} key={option.value}>
+              {option.short} {option.label}
+            </option>
+          ))}
+        </select>
+      </header>
+
+      <section className="join-title">
+        <h1>{props.t("ルームに参加", "Join room")}</h1>
+        <p>{props.t("招待されたルーム情報を入力してください", "Enter the room details you received")}</p>
+      </section>
+
+      <form
+        className="join-entry-card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          props.onJoin();
+        }}
+      >
+        <h2>{props.t("参加情報", "Join details")}</h2>
+        <label>
+          {props.t("表示名", "Display name")}
+          <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder={props.t("例：ゆうた", "Example: Yuta")} />
+        </label>
+        <label>
+          {props.t("ルームID", "Room ID")}
+          <input value={props.joinRoomId} onChange={(event) => props.setJoinRoomId(event.target.value.toUpperCase())} placeholder="AB12CD" />
+        </label>
+        <label>
+          {props.t("参加コード", "Join code")}
+          <input inputMode="numeric" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value)} placeholder="2468" />
+        </label>
+        <button className="primary-button join-submit" type="submit" disabled={!props.canJoin}>
+          {props.t("参加する", "Join")}
+        </button>
+        <p>{props.t("幹事から共有されたIDとコードを入力してください", "Use the ID and code shared by the host")}</p>
+      </form>
+
+      {props.roomSummaries.length > 0 && (
+        <button className="saved-room-link" type="button" onClick={() => props.onOpenRoom(props.roomSummaries[0].id)}>
+          <Home size={26} />
+          <strong>{props.t("保存済みルームから選ぶ", "Choose from saved rooms")}</strong>
+          <ChevronRight size={28} />
+        </button>
       )}
     </div>
   );
@@ -1462,7 +1581,7 @@ function JoinPanel(props: {
         <ChevronRight size={22} />
       </button>
       <p className="join-help">
-        {props.t("幹事から届いた招待文のURL、ルームID、参加コードを使います。DEMO42は練習用です。", "Use the URL, room ID, and join code from the host. DEMO42 is only for practice.")}
+        {props.t("幹事から届いた招待文のURL、ルームID、参加コードを使います。", "Use the URL, room ID, and join code from the host.")}
       </p>
     </section>
   );
@@ -1471,7 +1590,6 @@ function JoinPanel(props: {
 function HomeView(props: {
   room: Room;
   ranking: Player[];
-  elapsedTime: string;
   currentRaceNumber: number;
   hasJackpot: boolean;
   publicUrl: string;
@@ -1490,6 +1608,78 @@ function HomeView(props: {
 
   return (
     <div className="screen-stack">
+      <section className="home-dashboard-modern">
+        <div className="race-progress-card">
+          <span>{props.t("現在のレース", "Current race")}</span>
+          <h2>
+            {props.t("第", "Race ")}
+            <b>{props.currentRaceNumber}</b>
+            /{props.room.settings.maxRaces}
+            {props.t(" レース", "")}
+          </h2>
+          <div className="progress-line">
+            <span style={{ width: `${Math.max(8, (props.currentRaceNumber / props.room.settings.maxRaces) * 100)}%` }} />
+          </div>
+          <div className="race-status-grid">
+            <div>
+              <Trophy size={24} />
+              <span>{props.t("ベット完了", "Bets done")}</span>
+              <strong>{props.room.currentRace.bets.length} / {props.room.players.length}</strong>
+            </div>
+            <div>
+              <Settings2 size={24} />
+              <span>{props.t("結果", "Results")}</span>
+              <strong>{props.room.currentRace.resultIds.length ? props.t("入力済み", "Entered") : props.t("未入力", "Not entered")}</strong>
+            </div>
+            <div>
+              <CircleDollarSign size={24} />
+              <span>{props.t("精算", "Payout")}</span>
+              <strong>{props.room.currentRace.status === "settled" ? props.t("処理済み", "Done") : props.t("未処理", "Pending")}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="host-action-list">
+          <button className="host-action-card primary-action" type="button" onClick={props.onHostTab}>
+            <span><Settings2 size={28} /></span>
+            <div>
+              <strong>{props.t("結果を入力", "Enter results")}</strong>
+              <p>{props.t("着順を入力して精算へ進む", "Enter finish order and move to payouts")}</p>
+            </div>
+            <ChevronRight size={28} />
+          </button>
+          <button className="host-action-card" type="button" onClick={props.onHostTab}>
+            <span><CircleDollarSign size={27} /></span>
+            <div>
+              <strong>{props.t("配当を精算", "Settle payouts")}</strong>
+              <p>{props.t("配当を反映して残高更新", "Apply payouts and update balances")}</p>
+            </div>
+            <ChevronRight size={28} />
+          </button>
+          <button className="host-action-card" type="button" onClick={props.onHostTab}>
+            <span><Flag size={27} /></span>
+            <div>
+              <strong>{props.t("次のレースを開始", "Start next race")}</strong>
+              <p>{props.t("次の投票受付を開始", "Open betting for the next race")}</p>
+            </div>
+            <ChevronRight size={28} />
+          </button>
+        </div>
+
+        <section className="home-summary-card">
+          <div>
+            <BarChart3 size={24} />
+            <span>{props.t("未対応タスク", "Open tasks")}</span>
+            <strong>{props.room.currentRace.status === "settled" ? 0 : props.room.currentRace.resultIds.length ? 1 : 2}{props.t(" 件", "")}</strong>
+          </div>
+          <div>
+            <Users size={24} />
+            <span>{props.t("参加者", "Bettors")}</span>
+            <strong>{props.room.players.length}{props.t(" 人", "")}</strong>
+          </div>
+        </section>
+      </section>
+
       <section className={props.room.isDemo ? "race-hero welcome-hero" : "race-hero"}>
         <div>
           <p className="badge">{props.room.isDemo ? props.t("はじめに", "Start here") : props.t("開催中", "Live")}</p>
@@ -1508,7 +1698,6 @@ function HomeView(props: {
           <div className="timer">
             <Radio size={18} />
             <span>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</span>
-            <small>{props.t(`経過 ${props.elapsedTime}`, `Elapsed ${props.elapsedTime}`)}</small>
           </div>
         )}
       </section>
@@ -1672,7 +1861,6 @@ function BetView(props: {
   potentialPayout: number;
   displayMode: BetDisplayMode;
   setDisplayMode: (value: BetDisplayMode) => void;
-  elapsedTime: string;
   currentRaceNumber: number;
   placedPlayerCount: number;
   allPlayersPlaced: boolean;
@@ -1781,6 +1969,28 @@ function BetView(props: {
         </section>
       )}
 
+      <section className="bet-hero-2026">
+        <div className="bet-hero-title">
+          <div>
+            <span>第 <b>{props.currentRaceNumber}</b> レース</span>
+            <em>{statusLabel}</em>
+          </div>
+          <button type="button">
+            <Settings2 size={18} />
+            レース情報
+          </button>
+        </div>
+        <p>
+          {props.betType === "win"
+            ? "1着になる順位を予想してください"
+            : props.betType === "place"
+              ? "上位に入る対戦者を予想してください"
+              : props.betType === "exacta"
+                ? "1着・2着の順番を予想してください"
+                : "1着・2着・3着の順番を予想してください"}
+        </p>
+      </section>
+
       <section className={props.room.isDemo ? "race-mini two-up" : "race-mini"}>
         <div>
           <span>{props.t("現在の勝負", "Current round")}</span>
@@ -1790,12 +2000,6 @@ function BetView(props: {
           <span>{props.t("状態", "Status")}</span>
           <strong>{statusLabel}</strong>
         </div>
-        {!props.room.isDemo && (
-          <div>
-            <span>{props.t("経過", "Elapsed")}</span>
-            <strong>{props.elapsedTime}</strong>
-          </div>
-        )}
       </section>
 
       {props.sessionRole === "host" && (
@@ -2125,7 +2329,6 @@ function HostView(props: {
   themeCopy: Record<ThemeName, { label: string; note: string }>;
   uiModeCopy: Record<UiModeName, { label: string; note: string; tag: string }>;
   betTypeLabels: Record<BetType, { title: string; note: string }>;
-  elapsedTime: string;
   currentRaceNumber: number;
   placedPlayerCount: number;
   allPlayersPlaced: boolean;
@@ -2154,9 +2357,14 @@ function HostView(props: {
   onNextRace: () => void;
 }) {
   const [hostSection, setHostSection] = useState<HostSection>("progress");
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    document.querySelector<HTMLElement>(".phone-frame")?.scrollTo({ top: 0, behavior: "auto" });
+  }, [hostSection]);
+
   const hostTabs: Array<{ key: HostSection; label: string; note: string; icon: ReactNode }> = [
     { key: "progress", label: props.t("進行", "Run"), note: props.t("結果入力とベット確認", "Results and bets"), icon: <Trophy size={18} /> },
-    { key: "settings", label: props.t("基本", "Setup"), note: props.t("勝負名・ルール", "Name and rules"), icon: <Lock size={18} /> },
+    { key: "settings", label: props.t("設定", "Setup"), note: props.t("勝負名・ルール", "Name and rules"), icon: <Lock size={18} /> },
     { key: "players", label: props.t("参加者", "Bettors"), note: props.t("代行・ボーナス", "Proxy and bonus"), icon: <Users size={18} /> },
     { key: "contestants", label: props.t("対戦者", "Racers"), note: props.t("CPU・倍率", "CPU and odds"), icon: <Gamepad2 size={18} /> },
   ];
@@ -2169,10 +2377,10 @@ function HostView(props: {
     : props.resultIds.length === props.room.contestants.length
       ? props.t("払戻を反映する", "Apply payouts")
       : props.allPlayersPlaced
-        ? props.t("全員のBETが揃いました", "All bets are in")
+        ? props.t("全員のベットが揃いました", "All bets are in")
         : props.resultIds.length > 0
           ? props.t(`第${props.currentRaceNumber}レースの順位を続ける`, `Continue Race ${props.currentRaceNumber} results`)
-          : props.t("BET受付中です", "Betting is open");
+          : props.t("ベット受付中です", "Betting is open");
   const hostNextNote = props.room.currentRace.status === "settled"
     ? props.t("この勝負の払戻は反映済みです。続けるなら次の勝負へ進みます。", "Payouts are applied. Continue when you are ready.")
     : props.resultIds.length === props.room.contestants.length
@@ -2191,7 +2399,34 @@ function HostView(props: {
         : "open";
 
   return (
-    <div className="screen-stack host-stack">
+    <div className={`screen-stack host-stack host-section-${hostSection}`}>
+      <section className="host-progress-hero">
+        <span className="hero-kicker">現在のレース</span>
+        <h2>
+          第 <b>{props.currentRaceNumber}</b> / {props.room.settings.maxRaces} レース
+        </h2>
+        <div className="hero-progress-line" aria-hidden="true">
+          <span style={{ width: `${Math.max(7, (props.currentRaceNumber / props.room.settings.maxRaces) * 100)}%` }} />
+        </div>
+        <div className="host-progress-stats">
+          <div>
+            <Trophy size={24} />
+            <span>ベット完了</span>
+            <strong>{props.placedPlayerCount} / {props.room.players.length}</strong>
+          </div>
+          <div>
+            <Settings2 size={24} />
+            <span>結果</span>
+            <strong>{props.resultIds.length === props.room.contestants.length ? "入力済み" : "未入力"}</strong>
+          </div>
+          <div>
+            <CircleDollarSign size={24} />
+            <span>精算</span>
+            <strong>{props.room.currentRace.status === "settled" ? "処理済み" : "未処理"}</strong>
+          </div>
+        </div>
+      </section>
+
       <section className={`host-next-card ${hostNextTone}`}>
         <div className="host-next-copy">
           <span>{props.t("今やること", "Next up")}</span>
@@ -2239,29 +2474,56 @@ function HostView(props: {
         </div>
       </section>
 
-      <section className={hostSectionClass("progress")}>
-        <div className="section-heading">
-          <Radio size={20} />
+      <section className={`${hostSectionClass("progress")} host-stage-actions`}>
+        <button
+          className="host-stage-card primary-stage"
+          type="button"
+          onClick={() => document.getElementById("host-result-entry")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        >
+          <span><Settings2 size={30} /></span>
           <div>
-            <h2>{props.t("現在の進行", "Current Flow")}</h2>
-            <p>{props.t("ベット画面にも同じレース番号を表示します。", "The bet screen shows the same race number.")}</p>
+            <strong>結果を入力</strong>
+            <p>着順を入力して精算へ進む</p>
           </div>
-        </div>
-        <div className={props.room.isDemo ? "race-mini host-race-mini two-up" : "race-mini host-race-mini"}>
+          <ChevronRight size={28} />
+        </button>
+        <button
+          className="host-stage-card"
+          type="button"
+          disabled={props.resultIds.length !== props.room.contestants.length || props.room.currentRace.status === "settled"}
+          onClick={props.onSettle}
+        >
+          <span><CircleDollarSign size={28} /></span>
           <div>
-            <span>{props.t("レース", "Race")}</span>
-            <strong>{props.t(`第${props.currentRaceNumber}/${props.room.settings.maxRaces}レース`, `Race ${props.currentRaceNumber}/${props.room.settings.maxRaces}`)}</strong>
+            <strong>配当を精算</strong>
+            <p>配当を反映して残高更新</p>
+          </div>
+          <ChevronRight size={28} />
+        </button>
+        <button
+          className="host-stage-card"
+          type="button"
+          disabled={props.room.currentRace.status !== "settled"}
+          onClick={props.onNextRace}
+        >
+          <span><Flag size={28} /></span>
+          <div>
+            <strong>{props.currentRaceNumber >= props.room.settings.maxRaces ? "最終順位を見る" : "次のレースを開始"}</strong>
+            <p>{props.currentRaceNumber >= props.room.settings.maxRaces ? "ランキングで最終結果を確認" : "次の投票受付を開始"}</p>
+          </div>
+          <ChevronRight size={28} />
+        </button>
+        <div className="host-mini-summary">
+          <div>
+            <BarChart3 size={24} />
+            <span>未対応タスク</span>
+            <strong>{props.room.currentRace.status === "settled" ? 0 : props.resultIds.length === props.room.contestants.length ? 1 : 2}件</strong>
           </div>
           <div>
-            <span>{props.t("受付済み", "Bets")}</span>
-            <strong>{props.room.currentRace.bets.length}</strong>
+            <Users size={24} />
+            <span>参加者</span>
+            <strong>{props.room.players.length}人</strong>
           </div>
-          {!props.room.isDemo && (
-            <div>
-              <span>{props.t("経過", "Elapsed")}</span>
-              <strong>{props.elapsedTime}</strong>
-            </div>
-          )}
         </div>
       </section>
 
@@ -2278,8 +2540,8 @@ function HostView(props: {
           <input value={props.room.name} onChange={(event) => props.onRoomNameChange(event.target.value)} placeholder={props.t("例: スマブラ王決定戦", "Example: Smash Finals")} />
         </label>
         <div className="subsection-heading">
-          <strong>{props.t("UIモード", "UI mode")}</strong>
-          <span>{props.t("画面の流れそのものを切り替えます。迷いにくい新UIと、従来UIをいつでも選べます。", "Switch the screen flow itself between the guided new UI and the original layout.")}</span>
+          <strong>{props.t("操作フロー", "Interaction flow")}</strong>
+          <span>{props.t("迷わず進められる新しい画面構成で固定しています。", "The app now uses the guided modern flow by default.")}</span>
         </div>
         <div className="ui-mode-grid">
           {uiModeOrder.map((uiMode) => (
@@ -2297,7 +2559,7 @@ function HostView(props: {
         </div>
         <div className="subsection-heading">
           <strong>{props.t("配色テーマ", "Color theme")}</strong>
-          <span>{props.t("見た目の色だけを切り替えます。元の色味へ戻す場合はクラシックを選びます。", "Switch only the color treatment. Choose Classic to return to the original color mood.")}</span>
+          <span>{props.t("標準のライトテーマと、暗い場所向けのダークテーマだけを選べます。", "Choose between the default light theme and the dark theme for low-light play.")}</span>
         </div>
         <div className="theme-grid">
           {themeOrder.map((theme) => (
@@ -2564,50 +2826,7 @@ function HostView(props: {
         ))}
       </section>
 
-      <section className={hostSectionClass("progress")}>
-        <div className="section-heading">
-          <BarChart3 size={20} />
-          <div>
-            <h2>{props.t("ベット状況", "Bet Status")}</h2>
-            <p>{props.t(`${props.room.currentRace.bets.length}件のベットを受付済み`, `${props.room.currentRace.bets.length} bets placed`)}</p>
-          </div>
-        </div>
-        <div className="bet-log-window">
-          {props.room.currentRace.bets.length === 0 ? (
-            <p className="muted">{props.t("まだベットはありません。", "No bets yet.")}</p>
-          ) : (
-            <>
-              <div className="bet-log-head">
-                <span>{props.t("参加者", "Bettor")}</span>
-                <span>{props.t("対象", "Pick")}</span>
-                <span>{props.t("式", "Type")}</span>
-                <span>{props.t("額", "Amount")}</span>
-                <span>{props.t("入力", "By")}</span>
-              </div>
-              <div className="bet-log">
-                {[...props.room.currentRace.bets].reverse().map((bet) => {
-                  const player = props.room.players.find((item) => item.id === bet.playerId);
-                  const betTarget = getBetPickIds(bet)
-                    .map((contestantId) => props.room.contestants.find((item) => item.id === contestantId)?.name)
-                    .filter(Boolean)
-                    .join(" → ");
-                  return (
-                    <div className="bet-log-row" key={bet.id}>
-                      <span>{player?.name ?? "Unknown"}</span>
-                      <strong>{betTarget || "Unknown"}</strong>
-                      <span>{props.betTypeLabels[bet.type].title}</span>
-                      <strong>{currency.format(bet.amount)}</strong>
-                      <em>{bet.placedBy === "host" ? props.t("代行", "Proxy") : props.t("本人", "Self")}</em>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-
-      <section className={hostSectionClass("progress")}>
+      <section className={`${hostSectionClass("progress")} host-result-entry-panel`} id="host-result-entry">
         <div className="section-heading">
           <Trophy size={20} />
           <div>
@@ -2721,18 +2940,26 @@ function RankingView(props: {
               <p>{props.t("マイナス残高の人も最後まで表示します", "Negative balances stay visible until the end")}</p>
             </div>
           </div>
-          <div className="podium-grid">
-            {podiumPlayers.map(({ player, rank }) => (
-              <div className={`podium-card rank-${rank}`} key={player.id}>
-                <span className="podium-rank">{rank}</span>
-                <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
-                  {player.emoji}
-                </span>
-                <strong>{player.name}</strong>
-                <b>{currency.format(player.balance)}</b>
-              </div>
-            ))}
-          </div>
+          {props.ranking.length === 0 ? (
+            <div className="empty-state ranking-empty podium-empty-state">
+              <Crown size={26} />
+              <strong>{props.t("参加者待ちです", "Waiting for players")}</strong>
+              <span>{props.t("参加者が入るとランキングがここに表示されます。", "The ranking appears here when players join.")}</span>
+            </div>
+          ) : (
+            <div className="podium-grid">
+              {podiumPlayers.map(({ player, rank }) => (
+                <div className={`podium-card rank-${rank}`} key={player.id}>
+                  <span className="podium-rank">{rank}</span>
+                  <span className="avatar" style={{ "--accent": player.accent } as CSSProperties}>
+                    {player.emoji}
+                  </span>
+                  <strong>{player.name}</strong>
+                  <b>{currency.format(player.balance)}</b>
+                </div>
+              ))}
+            </div>
+          )}
           {props.ranking.map((player, index) => (
             <PlayerRankRow key={player.id} player={player} rank={index + 1} t={props.t} />
           ))}
@@ -2990,7 +3217,7 @@ function BottomNav(props: { active: TabKey; role: "host" | "player"; onChange: (
     { key: "home", label: props.t("ホーム", "Home"), icon: <Home size={22} /> },
     { key: "bet", label: props.t("ベット", "Bet"), icon: <Zap size={22} /> },
     { key: "host", label: props.t("管理", "Host"), icon: <Settings2 size={22} />, hostOnly: true },
-    { key: "ranking", label: props.t("順位", "Ranks"), icon: <Wallet size={22} /> },
+    { key: "ranking", label: props.t("順位", "Ranks"), icon: <Crown size={22} /> },
   ];
   const visibleTabs = tabs.filter((item) => props.role === "host" || !item.hostOnly);
   const activeIndex = Math.max(0, visibleTabs.findIndex((item) => item.key === props.active));

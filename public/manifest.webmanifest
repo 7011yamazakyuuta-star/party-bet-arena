@@ -1,7 +1,7 @@
 {
-  "name": "Party Bet Arena",
-  "short_name": "Party Bet",
-  "description": "Friends-only betting and ranking board for game nights.",
+  "name": "ランクパーティ",
+  "short_name": "ランクパーティ",
+  "description": "友達と遊ぶベット集計・ランキングWebアプリ。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -18,7 +18,7 @@ export const defaultContestants: Contestant[] = [
 
 export const createInitialRoom = (): Room => ({
   id: "DEMO42",
-  name: "みんなBET",
+  name: "ランクパーティ",
   isDemo: true,
   joinCode: "2468",
   hostPin: "0000",
@@ -71,7 +71,7 @@ export const createInitialRoom = (): Room => ({
   updatedAt: now,
 });
 
-export const createBlankRoom = (name = "みんなBET Arena", hostUid?: string): Room => {
+export const createBlankRoom = (name = "ランクパーティ", hostUid?: string): Room => {
   const roomId = Math.random().toString(36).slice(2, 8).toUpperCase();
   const joinCode = Math.floor(1000 + Math.random() * 9000).toString();
   const base = createInitialRoom();

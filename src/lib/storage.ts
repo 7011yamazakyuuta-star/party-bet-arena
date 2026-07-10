@@ -24,7 +24,7 @@ export type LocalRoomSummary = {
 };
 
 const validThemes = new Set<ThemeName>(["arena", "party", "garden", "candy", "sky", "neon", "pop", "minimal"]);
-const validUiModes = new Set<UiModeName>(["smart", "classic"]);
+const validUiModes = new Set<UiModeName>(["smart"]);
 const fallbackEmojis = ["🎮", "😎", "🌟", "🚗", "🎲", "🔥", "🍀", "🏆"];
 const fallbackContestantIcons = ["👑", "🤖", "⚡", "🍀", "🚀", "🎯", "💎", "⭐"];
 const legacyContestantIcons: Record<string, string> = {
