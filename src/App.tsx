@@ -45,17 +45,20 @@ import type { BetType, DraftBet, LanguageName, Player, Room, ThemeName } from ".
 import {
   RankBetView,
   RankBottomNav,
+  RankCreateRoomView,
   RankHomeView,
   RankHostView,
   RankLaunchView,
   RankRankingView,
+  RankRoomInviteView,
   RankRoomHeader,
 } from "./RankPartyViews";
-import type { RankHostSection } from "./RankPartyViews";
+import type { RankHostSection, RoomCreateInput } from "./RankPartyViews";
 
 type TabKey = "home" | "bet" | "host" | "ranking";
 type Translate = (ja: string, en: string) => string;
 type ResultDisplayMode = "ranking" | "payouts";
+type LauncherMode = "launch" | "create" | "created" | "invite";
 
 const emojiChoices = [
   "😀",
@@ -83,6 +86,15 @@ const emojiChoices = [
   "🤖",
   "🍄",
 ];
+
+function buildJoinUrl(room: Room) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("roomId", room.id);
+  url.searchParams.set("joinCode", room.joinCode);
+  return url.toString();
+}
 
 function getBetTypeCopy(t: Translate): Record<BetType, { title: string; note: string }> {
   return {
@@ -258,6 +270,9 @@ function App() {
   const [roomSummaries, setRoomSummaries] = useState(loadRoomSummaries);
   const [session, setSession] = useState(loadSession);
   const [showLauncher, setShowLauncher] = useState(true);
+  const [launcherMode, setLauncherMode] = useState<LauncherMode>("launch");
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [inviteShareReady, setInviteShareReady] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
   const [selectedContestantId, setSelectedContestantId] = useState(room.contestants[0]?.id ?? "");
   const [selectedPickIds, setSelectedPickIds] = useState<string[]>(room.contestants[0]?.id ? [room.contestants[0].id] : []);
@@ -320,7 +335,7 @@ function App() {
     const frame = document.querySelector<HTMLElement>(".phone-frame");
     window.scrollTo({ top: 0, behavior: "auto" });
     frame?.scrollTo({ top: 0, behavior: "auto" });
-  }, [showLauncher, tab, room.id, room.currentRace.id]);
+  }, [showLauncher, launcherMode, tab, room.id, room.currentRace.id]);
 
   useEffect(() => {
     if (!room.players.length) return;
@@ -371,6 +386,7 @@ function App() {
   const placedPlayerCount = new Set(room.currentRace.bets.map((bet) => bet.playerId)).size;
   const allPlayersPlaced = room.players.length > 0 && placedPlayerCount >= room.players.length;
   const isLaunchScreen = showLauncher || (session.role === "player" && !currentPlayer);
+  const joinUrl = useMemo(() => buildJoinUrl(room), [room.id, room.joinCode]);
   const hasJackpot = room.currentRace.status === "settled" && room.currentRace.bets.some((bet) => {
     const contestant = getContestant(room, getBetPickIds(bet)[0]);
     return contestant && contestant.odds >= 4 && isBetHit(bet.type, getBetPickIds(bet), room.currentRace.resultIds);
@@ -405,7 +421,9 @@ function App() {
     window.setTimeout(() => setToast(""), 2600);
   }
 
-  async function handleCreateRoom() {
+  async function handleCreateRoom(input: RoomCreateInput) {
+    if (isCreatingRoom) return;
+    setIsCreatingRoom(true);
     let hostUid: string | undefined;
     if (isFirebaseConfigured) {
       try {
@@ -414,19 +432,95 @@ function App() {
         const message = getFirebaseIssueCopy(error, t);
         setSyncIssue(message);
         showToast(message);
+        setIsCreatingRoom(false);
         return;
       }
     }
-    const next = createBlankRoom(t("新しい勝負", "New Match"), hostUid);
-    commitRoom(next);
-    setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+    try {
+      const base = createBlankRoom(input.name.trim(), hostUid);
+      const contestants = base.contestants.slice(0, input.maxContestants);
+      const next: Room = {
+        ...base,
+        name: input.name.trim(),
+        startingBalance: input.startingBalance,
+        contestants: input.autoOdds ? calculateAutoOdds(contestants) : contestants,
+        settings: {
+          ...base.settings,
+          maxRaces: input.maxRaces,
+          maxPlayers: input.maxPlayers,
+          maxContestants: input.maxContestants,
+          autoOdds: input.autoOdds,
+          marketOdds: input.marketOdds,
+          allowDebt: input.allowDebt,
+        },
+        updatedAt: Date.now(),
+      };
+
+      commitRoom(next, false);
+      let remoteReady = false;
+      if (isFirebaseConfigured) {
+        try {
+          await saveFirebaseRoom(next);
+          remoteReady = true;
+          setSyncIssue("");
+        } catch (error) {
+          const message = getFirebaseIssueCopy(error, t);
+          setSyncIssue(message);
+          showToast(message);
+        }
+      }
+
+      setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+      setTab("home");
+      setProxyPlayerId("");
+      setSelectedContestantId(next.contestants[0]?.id ?? "");
+      setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
+      setJoinRoomId(next.id);
+      setJoinCode(next.joinCode);
+      setInviteShareReady(remoteReady);
+      setLauncherMode("created");
+      setShowLauncher(true);
+      if (remoteReady) {
+        showToast(t("ルームを作成しました。QRで友達を招待できます。", "Room created. Invite friends with the QR code."));
+      } else if (!isFirebaseConfigured) {
+        showToast(t("端末内ルームを作成しました。QR参加にはFirebase設定が必要です。", "Local room created. Firebase is required for QR joining."));
+      }
+    } finally {
+      setIsCreatingRoom(false);
+    }
+  }
+
+  async function handleCopyInviteValue(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast(t(`${label}をコピーしました。`, `${label} copied.`));
+    } catch {
+      showToast(t("コピーできませんでした。長押ししてコピーしてください。", "Could not copy. Press and hold to copy."));
+    }
+  }
+
+  async function handleShareInvite() {
+    const shareText = t(
+      `${room.name}に参加してください。ルームID: ${room.id} / 参加コード: ${room.joinCode}`,
+      `Join ${room.name}. Room ID: ${room.id} / Join code: ${room.joinCode}`,
+    );
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: room.name, text: shareText, url: joinUrl });
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n${joinUrl}`);
+        showToast(t("招待リンクをコピーしました。", "Invitation link copied."));
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      showToast(t("共有できませんでした。", "Could not share the invitation."));
+    }
+  }
+
+  function handleOpenHostRoom() {
+    setLauncherMode("launch");
     setShowLauncher(false);
     setTab("home");
-    setProxyPlayerId("");
-    setSelectedContestantId(next.contestants[0]?.id ?? "");
-    setSelectedPickIds(next.contestants[0]?.id ? [next.contestants[0].id] : []);
-    setJoinRoomId(next.id);
-    showToast(t("本番ルームを作成しました。共有カードから招待できます。", "Live room created. Share it from the invite card."));
   }
 
   function handleOpenHostSection(section: RankHostSection) {
@@ -507,6 +601,7 @@ function App() {
       }
     }
     setSession((current) => ({ ...current, role: "player", playerId: player.id }));
+    setLauncherMode("launch");
     setShowLauncher(false);
     setTab("bet");
     showToast(t(`${name}で参加しました。`, `Joined as ${name}.`));
@@ -514,6 +609,7 @@ function App() {
 
   async function handleOpenRoom(roomId: string) {
     if (room.id === roomId) {
+      setLauncherMode("launch");
       setShowLauncher(false);
       setTab("home");
       showToast(t("このルームを表示中です。", "This room is already open."));
@@ -538,6 +634,8 @@ function App() {
       setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
       setSelectedPickIds(remoteRoom.contestants[0]?.id ? [remoteRoom.contestants[0].id] : []);
       setResultIds(remoteRoom.currentRace.resultIds ?? []);
+      setInviteShareReady(true);
+      setLauncherMode("launch");
       setShowLauncher(false);
       setTab("home");
       showToast(t("ルームを開きました。", "Room opened."));
@@ -964,22 +1062,43 @@ function App() {
 
         {isLaunchScreen ? (
           <>
-            <RankLaunchView
-              joinName={joinName}
-              setJoinName={setJoinName}
-              joinRoomId={joinRoomId}
-              setJoinRoomId={setJoinRoomId}
-              joinCode={joinCode}
-              setJoinCode={setJoinCode}
-              language={language}
-              onLanguageChange={handleLanguageChange}
-              roomSummaries={roomSummaries}
-              t={t}
-              onCreateRoom={handleCreateRoom}
-              onJoin={handleJoinPlayer}
-              onOpenRoom={handleOpenRoom}
-              onDeleteRoom={handleDeleteRoom}
-            />
+            {launcherMode === "create" ? (
+              <RankCreateRoomView
+                t={t}
+                isCreating={isCreatingRoom}
+                onBack={() => setLauncherMode("launch")}
+                onCreate={handleCreateRoom}
+              />
+            ) : launcherMode === "created" || launcherMode === "invite" ? (
+              <RankRoomInviteView
+                room={room}
+                joinUrl={joinUrl}
+                isNew={launcherMode === "created"}
+                shareReady={inviteShareReady}
+                syncIssue={syncIssue}
+                t={t}
+                onCopy={(value, label) => void handleCopyInviteValue(value, label)}
+                onShare={() => void handleShareInvite()}
+                onOpenHost={handleOpenHostRoom}
+              />
+            ) : (
+              <RankLaunchView
+                joinName={joinName}
+                setJoinName={setJoinName}
+                joinRoomId={joinRoomId}
+                setJoinRoomId={setJoinRoomId}
+                joinCode={joinCode}
+                setJoinCode={setJoinCode}
+                language={language}
+                onLanguageChange={handleLanguageChange}
+                roomSummaries={roomSummaries}
+                t={t}
+                onCreateRoom={() => setLauncherMode("create")}
+                onJoin={handleJoinPlayer}
+                onOpenRoom={handleOpenRoom}
+                onDeleteRoom={handleDeleteRoom}
+              />
+            )}
 
             {toast && (
               <div className="toast" role="status">
@@ -996,7 +1115,10 @@ function App() {
             activePlayer={activePlayer}
             t={t}
             onBack={() => {
-              if (tab === "home" || session.role === "player") setShowLauncher(true);
+              if (tab === "home" || session.role === "player") {
+                setLauncherMode("launch");
+                setShowLauncher(true);
+              }
               else setTab("home");
             }}
           />
@@ -1097,6 +1219,11 @@ function App() {
                 onResultPick={handleResultPick}
                 onSettle={handleSettle}
                 onNextRace={handleNextRace}
+                onShowInvite={() => {
+                  setInviteShareReady(isFirebaseConfigured && !syncIssue);
+                  setLauncherMode("invite");
+                  setShowLauncher(true);
+                }}
                 onBack={() => setTab("home")}
               />
             )}
