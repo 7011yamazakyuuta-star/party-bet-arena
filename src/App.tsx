@@ -288,6 +288,9 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = room.theme;
+    document
+      .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      ?.setAttribute("content", room.theme === "neon" ? "#090b0e" : "#fbfbfc");
   }, [room.theme]);
 
   useEffect(() => {

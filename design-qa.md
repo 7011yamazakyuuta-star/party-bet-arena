@@ -29,6 +29,8 @@
 - Primary viewport: 393 x 852 CSS pixels, light theme, host room with four bettors and four racers.
 - Responsive viewport: 768 x 1024 CSS pixels, centered 430 px app frame.
 - Additional state: dark theme checked on the basic-settings screen, then restored to light.
+- iPhone standalone follow-up: the mobile app now uses document scrolling instead of a nested `.phone-frame` scroller, with `viewport-fit=cover` and a translucent status-bar mode so long screens can move behind the Dynamic Island/status area.
+- Material follow-up: translucent blur is limited to floating navigation, sticky actions, balance controls, and notifications; content cards remain opaque.
 - Dynamic names, balances, odds, race number, and row counts intentionally use real local room data rather than copying the mock values.
 
 ## Full-View Comparison Evidence
@@ -57,6 +59,8 @@
 - Image and icon fidelity: the supplied yellow app icon remains the product asset. Interface commands use Lucide icons. User-configurable emoji avatars are an intentional product requirement rather than copied portrait photography.
 - Copy and content: the standalone Japanese labels are coherent; IDs and join codes appear in join/settings contexts instead of following every screen.
 - Accessibility: semantic buttons, labels, visible focus rings, reduced-motion support, and minimum stable control dimensions are present. The QR control has an unsupported-browser fallback.
+- Edge-to-edge behavior: at 393 x 852, the settings page measured 940 px document height, `window.scrollY` advanced to 88 px, `.phone-frame.scrollTop` stayed at 0, and no horizontal overflow was present.
+- Liquid Glass behavior: light and dark themes both expose a translucent surface plus `backdrop-filter`; contrast remains readable and the active yellow state stays visually distinct.
 - Legacy cleanup: obsolete theme variants, `uiMode`, `strengthRating`, old UI selectors, and unreachable legacy components were physically removed. Old saved-room extras are discarded during normalization.
 
 ## Comparison History
@@ -90,6 +94,7 @@
 - Enter complete finish order, settle payouts, and start the next-round flow.
 - Verify one winning and one losing ticket with payout and delta.
 - Toggle light/dark theme and restore light.
+- Scroll a long settings view through the document while keeping the glass action bar reachable.
 - Confirm mobile navigation and ranking/payout switching.
 - Expand saved rooms and use the dedicated join flow.
 
