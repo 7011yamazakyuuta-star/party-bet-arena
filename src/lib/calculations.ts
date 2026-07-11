@@ -36,7 +36,7 @@ export function calculateAutoOdds(contestants: Contestant[]) {
     const fairOdds = 1 / Math.max(0.001, winProbability);
     const playableOdds = 1 + (fairOdds - 1) * 0.32;
     const odds = Math.max(1.05, Math.min(maxOdds, Number(playableOdds.toFixed(2))));
-    return { ...contestant, odds, strengthRating: Math.max(1, Math.min(maxRating, contestant.cpuLevel || 5)) };
+    return { ...contestant, odds };
   });
 }
 
