@@ -534,6 +534,317 @@ summary::-webkit-details-marker {
   border-radius: 17px;
 }
 
+/* Room creation and invitation */
+
+.rp-create-entry {
+  padding-right: 22px;
+  padding-left: 22px;
+  padding-bottom: 0;
+}
+
+.rp-create-topbar {
+  justify-content: flex-start;
+}
+
+.rp-create-heading {
+  margin: 18px 0 16px;
+}
+
+.rp-create-heading h1 {
+  font-size: 40px;
+}
+
+.rp-create-form {
+  display: grid;
+  gap: 14px;
+}
+
+.rp-create-settings-card {
+  padding: 0 18px;
+  background: var(--rp-surface);
+  border: 1px solid var(--rp-border);
+  border-radius: 20px;
+  box-shadow: var(--rp-shadow-soft);
+}
+
+.rp-create-name-field {
+  display: grid;
+  gap: 8px;
+  padding: 16px 0 14px;
+}
+
+.rp-create-name-field > span,
+.rp-create-setting-row > strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.rp-create-name-field input {
+  width: 100%;
+  height: 48px;
+  padding: 0 15px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+.rp-create-setting-row {
+  min-height: 57px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(126px, 44%);
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--rp-border);
+}
+
+.rp-create-setting-row > input {
+  width: 100%;
+  height: 44px;
+  padding: 0 15px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.rp-create-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(50px, 1fr) 44px;
+  align-items: center;
+  gap: 7px;
+}
+
+.rp-create-stepper button {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--rp-surface);
+  border: 1px solid var(--rp-border-strong);
+  border-radius: 12px;
+}
+
+.rp-create-stepper output {
+  color: var(--rp-text);
+  text-align: center;
+  font-size: 31px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-create-toggle-row {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--rp-border);
+}
+
+.rp-create-toggle-row .rp-toggle {
+  width: 100%;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rp-create-toggle-row .rp-toggle > span {
+  width: 50px;
+  height: 30px;
+  border-radius: 15px;
+}
+
+.rp-create-toggle-row .rp-toggle > span::after {
+  width: 24px;
+  height: 24px;
+}
+
+.rp-create-toggle-row .rp-toggle input:checked + span::after {
+  transform: translateX(20px);
+}
+
+.rp-create-toggle-row .rp-toggle em {
+  flex: 1;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.rp-create-actions,
+.rp-invite-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: grid;
+  gap: 9px;
+  margin-right: -22px;
+  margin-left: -22px;
+  padding: 11px 22px var(--safe-bottom);
+  background: var(--rp-glass-fill);
+  border-top: 1px solid var(--rp-glass-border);
+  box-shadow: inset 0 1px 0 var(--rp-glass-highlight), 0 -16px 38px rgba(24, 29, 39, 0.08);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+}
+
+.rp-create-actions .rp-secondary-button {
+  color: var(--rp-yellow-ink);
+  background: color-mix(in srgb, var(--rp-surface) 76%, transparent);
+  border-color: var(--rp-yellow);
+}
+
+.rp-create-actions .rp-primary-button,
+.rp-create-actions .rp-secondary-button {
+  min-height: 48px;
+}
+
+.rp-invite-entry {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-right: 24px;
+  padding-left: 24px;
+  padding-bottom: 0;
+  text-align: center;
+}
+
+.rp-invite-heading {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin: 16px 0 14px;
+}
+
+.rp-invite-success {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+  color: var(--rp-yellow);
+  border: 4px solid var(--rp-yellow);
+  border-radius: 50%;
+}
+
+.rp-invite-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 850;
+}
+
+.rp-invite-heading p {
+  margin: 0;
+  color: var(--rp-text);
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.rp-invite-qr-card {
+  width: min(64vw, 248px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e2e3e6;
+  border-radius: 17px;
+  box-shadow: var(--rp-shadow-soft);
+}
+
+.rp-invite-qr-card > svg {
+  width: 100%;
+  height: auto;
+}
+
+.rp-invite-scan-copy {
+  margin: 12px 0 14px;
+  color: var(--rp-text);
+  font-size: 15px;
+}
+
+.rp-invite-credentials {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rp-invite-credentials button {
+  min-width: 0;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 5px 8px;
+  padding: 10px 13px;
+  text-align: left;
+  background: var(--rp-surface);
+  border: 1px solid var(--rp-border);
+  border-radius: 14px;
+  box-shadow: var(--rp-shadow-soft);
+}
+
+.rp-invite-credentials span {
+  grid-column: 1 / 3;
+  color: var(--rp-muted);
+  font-size: 12px;
+}
+
+.rp-invite-credentials strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 21px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-invite-warning {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 13px 0 0;
+  padding: 11px 13px;
+  color: var(--rp-red);
+  text-align: left;
+  background: color-mix(in srgb, var(--rp-red) 7%, var(--rp-surface));
+  border: 1px solid color-mix(in srgb, var(--rp-red) 28%, var(--rp-border));
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.rp-invite-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.rp-invite-actions {
+  width: calc(100% + 48px);
+  margin-top: auto;
+  margin-right: -24px;
+  margin-left: -24px;
+  padding: 13px 24px var(--safe-bottom);
+  border-radius: 28px 28px 0 0;
+}
+
+.rp-invite-actions .rp-secondary-button {
+  background: color-mix(in srgb, var(--rp-surface) 78%, transparent);
+}
+
+.rp-invite-actions .rp-primary-button,
+.rp-invite-actions .rp-secondary-button {
+  min-height: 50px;
+}
+
+.rp-tertiary-action {
+  min-height: 44px;
+  color: var(--rp-text);
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+
 /* Shared room headers */
 
 .rp-room-header {

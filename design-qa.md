@@ -11,10 +11,12 @@
 - Participants: `design-qa-assets/reference-05-participants.png`
 - Ranking: `design-qa-assets/reference-06-ranking.png`
 - Payout: `design-qa-assets/reference-07-results.png`
+- Room creation: `design-qa-assets/reference-08-room-create.png`
+- Room invitation: `design-qa-assets/reference-09-room-invite.png`
 
 ### Browser-rendered implementation
 
-- Local URL: `http://127.0.0.1:5180/party-bet-arena/`
+- Local URL: `http://127.0.0.1:5191/party-bet-arena/`
 - Launch: `design-qa-assets/2026-07-09-final-01-launch.png`
 - Join final: `design-qa-assets/2026-07-09-final-02-join.png`
 - Host home: `design-qa-assets/2026-07-09-final-03-host.png`
@@ -23,6 +25,9 @@
 - Contestants: `design-qa-assets/2026-07-09-final-06-contestants.png`
 - Ranking final: `design-qa-assets/2026-07-09-final-07-ranking.png`
 - Payout: `design-qa-assets/2026-07-09-final-08-payouts.png`
+- Room creation: `design-qa-assets/room-create-final.jpg`
+- Room invitation: `design-qa-assets/room-invite-final.jpg`
+- QR-prefilled join screen: `design-qa-assets/room-join-prefilled.jpg`
 
 ## Viewport And State
 
@@ -42,6 +47,8 @@
 - Participants: `design-qa-assets/compare-05-participants.png`
 - Ranking final: `design-qa-assets/compare-06-ranking.png`
 - Payout: `design-qa-assets/compare-07-results.png`
+- Room creation: `design-qa-assets/compare-08-room-create.png`
+- Room invitation: `design-qa-assets/compare-09-room-invite.png`
 
 ## Focused Region Evidence
 
@@ -49,6 +56,8 @@
 - Ranking header and 2-1-3 podium were checked in `compare-ranking-final.png`; the title and all podium labels remain visible.
 - Join inputs, QR action, primary CTA, and saved-room affordance were checked in `compare-join-final.png`.
 - Payout five-column rows were checked in `compare-payout.png`; positive and negative deltas are fully visible.
+- Room creation settings were checked in `compare-08-room-create.png`; all three rule toggles and both bottom actions remain visible at 390 x 844 without overlap.
+- Invitation QR scale, credentials, and action hierarchy were checked in `compare-09-room-invite.png`; the QR stays on an opaque white quiet-zone card in both themes.
 
 ## Findings
 
@@ -59,6 +68,8 @@
 - Image and icon fidelity: the supplied yellow app icon remains the product asset. Interface commands use Lucide icons. User-configurable emoji avatars are an intentional product requirement rather than copied portrait photography.
 - Copy and content: the standalone Japanese labels are coherent; IDs and join codes appear in join/settings contexts instead of following every screen.
 - Accessibility: semantic buttons, labels, visible focus rings, reduced-motion support, and minimum stable control dimensions are present. The QR control has an unsupported-browser fallback.
+- QR integrity: `react-qr-code` produces a standards-compliant QR payload containing the room ID and join code. `npm run verify:qr -- design-qa-assets/room-invite-final.jpg` decoded the rendered browser screenshot and returned `roomId=6UG3PP` and `joinCode=8900`; opening that decoded URL prefilled the same values on the join screen.
+- Invitation reuse: the host can reopen the same QR from Basic settings, and room ID copy was verified against the browser clipboard.
 - Edge-to-edge behavior: at 393 x 852, the settings page measured 940 px document height, `window.scrollY` advanced to 88 px, `.phone-frame.scrollTop` stayed at 0, and no horizontal overflow was present.
 - Liquid Glass behavior: light and dark themes both expose a translucent surface plus `backdrop-filter`; contrast remains readable and the active yellow state stays visually distinct.
 - Legacy cleanup: obsolete theme variants, `uiMode`, `strengthRating`, old UI selectors, and unreachable legacy components were physically removed. Old saved-room extras are discarded during normalization.
@@ -97,13 +108,18 @@
 - Scroll a long settings view through the document while keeping the glass action bar reachable.
 - Confirm mobile navigation and ranking/payout switching.
 - Expand saved rooms and use the dedicated join flow.
+- Configure a room before creation, create it, render the invite QR, decode the QR screenshot with an independent decoder, open the decoded deep link, and verify room ID/join-code prefill.
+- Open the host surface, return to Basic settings, and reopen the invitation QR.
+- Copy the room ID from the invitation credential card.
 
 ## Console And Build Checks
 
-- No browser errors were generated during the final July 11 verification. The browser log retains three historical Vite HMR entries from July 10 before the obsolete component removal; none recurred after reload or interaction.
+- No browser warnings or errors were generated during the final July 11 room-creation and QR verification.
 - `npm run lint`: passed.
+- `npm run verify:qr -- design-qa-assets/room-invite-final.jpg`: passed.
 - Strict unused TypeScript check: passed.
 - Production Vite build: passed after the final UI and QR changes. The later schema-only legacy-field cleanup passed both TypeScript checks; a redundant build rerun was blocked by the local Codex execution quota rather than an application error.
+- `npm audit --omit=dev --json`: zero production vulnerabilities. Two low-severity findings remain in local-only Vite/Babel tooling and are not shipped in the static Pages bundle.
 - `git diff --check`: passed (line-ending conversion notices only).
 - Sensitive-pattern scan of `src`, `public`, and `.github`: zero matching files.
 

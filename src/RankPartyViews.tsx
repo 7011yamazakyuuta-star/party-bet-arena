@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import QRCode from "react-qr-code";
 import {
   ArrowLeft,
   BarChart3,
@@ -9,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  Copy,
   Crown,
   Flag,
   Globe2,
@@ -19,6 +21,7 @@ import {
   Minus,
   Moon,
   Plus,
+  QrCode,
   Radio,
   Save,
   ScanLine,
@@ -51,6 +54,16 @@ import type {
 
 export type RankTabKey = "home" | "bet" | "host" | "ranking";
 export type RankHostSection = "results" | "settings" | "people";
+export type RoomCreateInput = {
+  name: string;
+  maxRaces: number;
+  startingBalance: number;
+  maxPlayers: number;
+  maxContestants: number;
+  autoOdds: boolean;
+  marketOdds: boolean;
+  allowDebt: boolean;
+};
 type Translate = (ja: string, en: string) => string;
 type ResultDisplayMode = "ranking" | "payouts";
 
@@ -125,6 +138,16 @@ export function RankLaunchView(props: {
   const [qrStatus, setQrStatus] = useState("");
   const qrInputRef = useRef<HTMLInputElement>(null);
   const canJoin = Boolean(props.joinRoomId.trim() && props.joinCode.trim());
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get("roomId") ?? params.get("room") ?? params.get("id");
+    const code = params.get("joinCode") ?? params.get("code");
+    if (!roomId || !code) return;
+    props.setJoinRoomId(roomId.toUpperCase());
+    props.setJoinCode(code);
+    setShowJoin(true);
+  }, [props.setJoinCode, props.setJoinRoomId]);
 
   const readQrImage = async (file?: File) => {
     if (!file) return;
@@ -283,6 +306,162 @@ export function RankLaunchView(props: {
           </div>
         </details>
       )}
+    </div>
+  );
+}
+
+export function RankCreateRoomView(props: {
+  t: Translate;
+  isCreating: boolean;
+  onBack: () => void;
+  onCreate: (input: RoomCreateInput) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<RoomCreateInput>({
+    name: "",
+    maxRaces: 15,
+    startingBalance: 1000,
+    maxPlayers: 8,
+    maxContestants: 6,
+    autoOdds: true,
+    marketOdds: true,
+    allowDebt: false,
+  });
+
+  const updateNumber = (
+    key: "maxRaces" | "startingBalance" | "maxPlayers" | "maxContestants",
+    value: number,
+    min: number,
+    max: number,
+  ) => {
+    const safeValue = Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
+    setDraft((current) => ({ ...current, [key]: safeValue }));
+  };
+
+  return (
+    <div className="rp-entry rp-create-entry">
+      <header className="rp-entry-topbar rp-create-topbar">
+        <button className="rp-icon-button" type="button" onClick={props.onBack} aria-label={props.t("戻る", "Back")}>
+          <ArrowLeft size={28} />
+        </button>
+      </header>
+
+      <div className="rp-page-heading rp-create-heading">
+        <h1>{props.t("ルームを作成", "Create a room")}</h1>
+        <p>{props.t("最初の設定はあとから変更できます", "You can change these settings later")}</p>
+      </div>
+
+      <form
+        className="rp-create-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!draft.name.trim()) return;
+          void props.onCreate(draft);
+        }}
+      >
+        <section className="rp-create-settings-card">
+          <label className="rp-create-name-field">
+            <span>{props.t("ルーム名", "Room name")}</span>
+            <input
+              value={draft.name}
+              maxLength={40}
+              onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder={props.t("例：週末レース", "Example: Weekend race")}
+            />
+          </label>
+
+          <div className="rp-create-setting-row rp-create-race-row">
+            <strong>{props.t("全レース数", "Total races")}</strong>
+            <div className="rp-create-stepper">
+              <button type="button" onClick={() => updateNumber("maxRaces", draft.maxRaces - 1, 1, 99)} aria-label={props.t("レース数を減らす", "Decrease races")}><Minus size={22} /></button>
+              <output>{draft.maxRaces}</output>
+              <button type="button" onClick={() => updateNumber("maxRaces", draft.maxRaces + 1, 1, 99)} aria-label={props.t("レース数を増やす", "Increase races")}><Plus size={22} /></button>
+            </div>
+          </div>
+
+          <label className="rp-create-setting-row">
+            <strong>{props.t("初期コイン", "Starting coins")}</strong>
+            <input type="number" inputMode="numeric" min="0" max="1000000000" value={draft.startingBalance} onChange={(event) => updateNumber("startingBalance", Number(event.target.value), 0, 1000000000)} />
+          </label>
+          <label className="rp-create-setting-row">
+            <strong>{props.t("参加者上限", "Bettor limit")}</strong>
+            <input type="number" inputMode="numeric" min="1" max="8" value={draft.maxPlayers} onChange={(event) => updateNumber("maxPlayers", Number(event.target.value), 1, 8)} />
+          </label>
+          <label className="rp-create-setting-row">
+            <strong>{props.t("対戦者上限", "Racer limit")}</strong>
+            <input type="number" inputMode="numeric" min="2" max="8" value={draft.maxContestants} onChange={(event) => updateNumber("maxContestants", Number(event.target.value), 2, 8)} />
+          </label>
+
+          <div className="rp-create-toggle-row">
+            <Toggle checked={draft.autoOdds} label={props.t("CPUレベルからオッズを自動計算する", "Calculate odds from CPU levels")} onChange={(autoOdds) => setDraft((current) => ({ ...current, autoOdds }))} />
+          </div>
+          <div className="rp-create-toggle-row">
+            <Toggle checked={draft.marketOdds} label={props.t("投票量に応じて倍率を変動する", "Move odds with the betting pool")} onChange={(marketOdds) => setDraft((current) => ({ ...current, marketOdds }))} />
+          </div>
+          <div className="rp-create-toggle-row">
+            <Toggle checked={draft.allowDebt} label={props.t("マイナス残高でも続行する", "Allow debt betting")} onChange={(allowDebt) => setDraft((current) => ({ ...current, allowDebt }))} />
+          </div>
+        </section>
+
+        <div className="rp-create-actions">
+          <button className="rp-primary-button" type="submit" disabled={!draft.name.trim() || props.isCreating}>
+            {props.isCreating ? props.t("作成中…", "Creating…") : props.t("ルームを作成", "Create room")}
+          </button>
+          <button className="rp-secondary-button" type="button" onClick={props.onBack} disabled={props.isCreating}>{props.t("キャンセル", "Cancel")}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export function RankRoomInviteView(props: {
+  room: Room;
+  joinUrl: string;
+  isNew: boolean;
+  shareReady: boolean;
+  syncIssue: string;
+  t: Translate;
+  onCopy: (value: string, label: string) => void;
+  onShare: () => void;
+  onOpenHost: () => void;
+}) {
+  return (
+    <div className="rp-entry rp-invite-entry">
+      <header className="rp-invite-heading">
+        <span className="rp-invite-success" aria-hidden="true"><Check size={38} /></span>
+        <h1>{props.isNew ? props.t("ルームを作成しました", "Room created") : props.t("ルームに招待", "Invite to room")}</h1>
+        <p>{props.room.name}</p>
+      </header>
+
+      <section className="rp-invite-qr-card" data-testid="room-invite-qr" aria-label={props.t("参加用QRコード", "Join QR code")}>
+        <QRCode value={props.joinUrl} size={256} bgColor="#ffffff" fgColor="#050505" level="M" />
+      </section>
+      <p className="rp-invite-scan-copy">{props.t("友達のスマホで読み取って参加", "Scan with a friend's phone to join")}</p>
+
+      <div className="rp-invite-credentials" data-testid="room-invite-credentials">
+        <button type="button" onClick={() => props.onCopy(props.room.id, props.t("ルームID", "Room ID"))}>
+          <span>{props.t("ルームID", "Room ID")}</span>
+          <strong>{props.room.id}</strong>
+          <Copy size={20} aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => props.onCopy(props.room.joinCode, props.t("参加コード", "Join code"))}>
+          <span>{props.t("参加コード", "Join code")}</span>
+          <strong>{props.room.joinCode}</strong>
+          <Copy size={20} aria-hidden="true" />
+        </button>
+      </div>
+
+      {!props.shareReady && (
+        <p className="rp-invite-warning" role="status">
+          <Radio size={18} />
+          {props.syncIssue || props.t("この端末には保存済みです。QR参加にはFirebase接続が必要です。", "Saved on this device. Firebase is required for QR joining.")}
+        </p>
+      )}
+
+      <div className="rp-invite-actions">
+        <button className="rp-primary-button" type="button" onClick={props.onOpenHost}>{props.t("幹事画面を開く", "Open host screen")}</button>
+        <button className="rp-secondary-button" type="button" onClick={props.onShare} disabled={!props.shareReady}><Share2 size={20} />{props.t("招待リンクを共有", "Share invitation link")}</button>
+        <button className="rp-tertiary-action" type="button" onClick={props.onOpenHost}>{props.t("あとで招待する", "Invite later")}</button>
+      </div>
     </div>
   );
 }
@@ -664,6 +843,7 @@ export function RankHostView(props: {
   onResultPick: (contestantId: string) => void;
   onSettle: () => void;
   onNextRace: () => void;
+  onShowInvite: () => void;
   onBack: () => void;
 }) {
   const settled = props.room.currentRace.status === "settled";
@@ -720,8 +900,9 @@ export function RankHostView(props: {
               <div><span>{props.t("ルームID", "Room ID")}</span><strong>{props.room.id}</strong></div>
               <div><span>{props.t("参加コード", "Join code")}</span><strong>{props.room.joinCode}</strong></div>
             </div>
+            <button className="rp-secondary-button rp-show-invite" type="button" onClick={props.onShowInvite}><QrCode size={19} />{props.t("招待QRを表示", "Show invitation QR")}</button>
             <div className="rp-number-grid">
-              <label><span>{props.t("全レース数", "Total races")}</span><input type="number" min="1" max="15" value={props.room.settings.maxRaces} onChange={(event) => props.onSettingChange("maxRaces", Number(event.target.value))} /></label>
+              <label><span>{props.t("全レース数", "Total races")}</span><input type="number" min="1" max="99" value={props.room.settings.maxRaces} onChange={(event) => props.onSettingChange("maxRaces", Number(event.target.value))} /></label>
               <label><span>{props.t("初期コイン", "Starting coins")}</span><input type="number" value={props.room.startingBalance} onChange={(event) => props.onStartingBalanceChange(Number(event.target.value))} /></label>
               <label><span>{props.t("参加者上限", "Bettor limit")}</span><input type="number" min="1" max="8" value={props.room.settings.maxPlayers} onChange={(event) => props.onSettingChange("maxPlayers", Number(event.target.value))} /></label>
               <label><span>{props.t("対戦者上限", "Racer limit")}</span><input type="number" min="1" max="8" value={props.room.settings.maxContestants} onChange={(event) => props.onSettingChange("maxContestants", Number(event.target.value))} /></label>
