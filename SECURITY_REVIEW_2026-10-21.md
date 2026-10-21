@@ -32,3 +32,13 @@
 5. For meaningful money or adversarial play, move balance and result authority to a trusted server or Cloud Functions with authenticated host roles and an audit trail. Client-side rules cannot make a malicious host honest.
 
 This checkpoint deliberately leaves production unchanged so the app remains usable during the pause.
+
+## Continuation on 2026-10-21
+
+- Browser E2E used only the local Firebase Authentication and Realtime Database emulators in separate browser contexts. Room creation, invalid-code rejection, valid join, own bet, host settlement, participant balance synchronization, and saved-room reopen worked.
+- E2E exposed a data-integrity bug: empty live collections omitted by Realtime Database were replaced with demo players and demo bets. Normalization now keeps live collections empty; a fresh room showed `0 / 0`, then immediately showed the real member and bet as they arrived.
+- Opening a saved room now binds the UI role to the current Firebase UID. A participant can no longer enter the host UI merely by choosing a saved room.
+- Online full-room records are removed from `localStorage` after successful Firebase save or confirmed sync; invite codes are removed from saved-room summaries. Unconfirmed offline changes retain their local copy to avoid data loss. Anonymous Firebase Auth state still persists in the browser, so this reduces local residue but is not a sign-out feature.
+- Rules now reject unknown fields and oversized member/player strings and bets; the emulator tests cover these cases.
+- Replacing Firebase CLI 15.34.0 with the audit-suggested 14.23.0 increased advisories from 7 to 19 and introduced a Node 24 engine warning. The change was reverted. Runtime dependency audit remains at 0 known vulnerabilities; 7 dev dependency advisories remain.
+- Production Pages, production Firebase rules, and production room data remain unchanged. Before release, perform the old-room migration/retirement and production browser verification described above.

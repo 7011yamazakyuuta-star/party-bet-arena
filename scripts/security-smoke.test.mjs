@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createBlankRoom } from "../src/lib/sample.ts";
 import { createBet, getEffectiveMultiplier, settleRoom, validateBet } from "../src/lib/calculations.ts";
+import { loadRoom, normalizeRoom, saveRoom } from "../src/lib/storage.ts";
 
 function bettingRoom() {
   const room = createBlankRoom("security test", "host-uid");
@@ -26,6 +27,43 @@ test("new invitations do not reuse short predictable identifiers", () => {
   assert.match(first.joinCode, /^[A-HJ-NP-Z2-9]{16}$/);
   assert.notEqual(first.id, second.id);
   assert.notEqual(first.joinCode, second.joinCode);
+});
+
+test("empty live Firebase collections do not inherit demo players or bets", () => {
+  const room = createBlankRoom("new live room", "host-uid");
+  const databaseValue = structuredClone(room);
+  delete databaseValue.players;
+  delete databaseValue.currentRace.bets;
+  const restored = normalizeRoom(databaseValue);
+  assert.equal(restored.players.length, 0);
+  assert.equal(restored.currentRace.bets.length, 0);
+  assert.equal(restored.contestants.length, room.contestants.length);
+});
+
+test("synchronized rooms do not retain full records or invite codes in localStorage", () => {
+  const previousStorage = globalThis.localStorage;
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const liveRoom = createBlankRoom("privacy test", "host-uid");
+    const fullRoomKey = "party-bet-arena:room";
+    localStorage.setItem(fullRoomKey, JSON.stringify(liveRoom));
+    assert.equal(loadRoom().id, liveRoom.id);
+    assert.notEqual(localStorage.getItem(fullRoomKey), null);
+    saveRoom(liveRoom, false);
+    assert.equal(localStorage.getItem(fullRoomKey), null);
+    assert.ok(!localStorage.getItem("party-bet-arena:room-summaries").includes(liveRoom.joinCode));
+    localStorage.setItem(fullRoomKey, JSON.stringify({ ...liveRoom, updatedAt: liveRoom.updatedAt + 1 }));
+    saveRoom(liveRoom, false);
+    assert.notEqual(localStorage.getItem(fullRoomKey), null);
+  } finally {
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
 });
 
 test("self bets reject duplicate, invalid and unaffordable amounts", () => {

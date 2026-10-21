@@ -87,6 +87,19 @@ npm run test:rules:emulator
 npm audit --omit=dev --audit-level=high
 ```
 
+本番へ書き込まずにブラウザで結合確認する場合は、`.env.local` に以下の**エミュレータ専用**設定を入れ、別々のターミナルで `npm run dev:emulators` と `npm run dev` を起動します。`VITE_USE_FIREBASE_EMULATORS` は開発サーバーでのみ有効です。
+
+```dotenv
+VITE_FIREBASE_API_KEY=demo-key
+VITE_FIREBASE_APP_ID=1:123:web:123
+VITE_FIREBASE_AUTH_DOMAIN=demo-party-bet-security.firebaseapp.com
+VITE_FIREBASE_DATABASE_URL=https://demo-party-bet-security-default-rtdb.firebaseio.com
+VITE_FIREBASE_PROJECT_ID=demo-party-bet-security
+VITE_USE_FIREBASE_EMULATORS=true
+```
+
+オンラインルーム全体のローカルキャッシュは、Firebaseへの保存・同期が確認できた後に削除します。保存済みルーム一覧にはIDと表示用情報だけを残し、参加コードは削除します。通信障害中は未同期データを失わないよう、全体キャッシュが残る場合があります。共有端末ではFirebaseの匿名ログイン状態も別途残るため、端末自体の管理が必要です。
+
 クライアントとルールは同じ変更として公開し、新しいサイトのデプロイを確認してからFirebaseルールを公開してください。先にルールだけ切り替えると旧クライアントの参加・BET書き込みが拒否されます。ルールを本番へ反映した後、新規ルームの作成、招待参加、BET、結果確定を実機ブラウザで確認してください。
 
 既存の短い参加コードは推測されやすいため、新しいルームを作り、招待リンクを更新してください。匿名認証を使う限り、端末を変えたりブラウザデータを消したりするとホスト権限を復元できません。

@@ -50,6 +50,7 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
       role: "player", joinCode: "WRONG", joinedAt: Date.now(),
     }));
     const membership = { role: "player", joinCode, joinedAt: Date.now() };
+    await assertFails(set(ref(player, `roomMembers/${roomId}/${playerUid}`), { ...membership, extra: "x".repeat(1000) }));
     await assertSucceeds(set(ref(player, `roomMembers/${roomId}/${playerUid}`), membership));
     await assertSucceeds(get(ref(player, `rooms/${roomId}`)));
     await assertFails(set(ref(player, `roomMembers/${roomId}/${playerUid}`), { ...membership, role: "host" }));
@@ -60,6 +61,12 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
     };
     await assertFails(set(ref(player, `rooms/${roomId}/players/${playerUid}`), {
       ...playerRecord, balance: room.startingBalance + 10000,
+    }));
+    await assertFails(set(ref(player, `rooms/${roomId}/players/${playerUid}`), {
+      ...playerRecord, extra: "x".repeat(1000),
+    }));
+    await assertFails(set(ref(player, `rooms/${roomId}/players/${playerUid}`), {
+      ...playerRecord, emoji: "x".repeat(1000),
     }));
     await assertSucceeds(set(ref(player, `rooms/${roomId}/players/${playerUid}`), playerRecord));
     await assertFails(set(ref(player, `rooms/${roomId}/players/${playerUid}/balance`), 1000000));
@@ -76,6 +83,7 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
     await assertSucceeds(set(ref(host, `rooms/${roomId}/currentRace/status`), "betting"));
     await assertFails(set(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`), { ...bet, amount: 1000000 }));
     await assertFails(set(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`), { ...bet, multiplier: 9999 }));
+    await assertFails(set(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`), { ...bet, extra: "x".repeat(1000) }));
     await assertSucceeds(set(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`), bet));
     await assertFails(set(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`), { ...bet, amount: 1 }));
     await assertFails(remove(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`)));

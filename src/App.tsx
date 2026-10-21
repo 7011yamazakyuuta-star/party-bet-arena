@@ -350,7 +350,7 @@ function App() {
     subscribeFirebaseRoom(room.id, (remoteRoom) => {
       if (isRoomDeleted(remoteRoom.id)) return;
       setRoom(remoteRoom);
-      setRoomSummaries(saveRoom(remoteRoom));
+      setRoomSummaries(saveRoom(remoteRoom, false));
     }).then((cleanup) => {
       unsubscribe = cleanup;
     });
@@ -632,14 +632,21 @@ function App() {
     }
 
     try {
+      const uid = await getFirebaseUid();
       const remoteRoom = await fetchFirebaseRoom(roomId);
       if (!remoteRoom) {
         showToast(t("ルームが見つかりません。削除済みか、Firebase設定を確認してください。", "Room not found. It may be deleted or Firebase may need setup."));
         return;
       }
+      const isHost = Boolean(uid && remoteRoom.hostUid === uid);
+      const ownPlayer = uid ? remoteRoom.players.find((player) => player.uid === uid) : undefined;
+      if (!isHost && !ownPlayer) {
+        showToast(t("この端末の参加情報が見つかりません。", "No membership for this device was found."));
+        return;
+      }
       restoreRoomSummary(remoteRoom.id);
       commitRoom(remoteRoom, false);
-      setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+      setSession((current) => ({ ...current, role: isHost ? "host" : "player", playerId: isHost ? undefined : ownPlayer?.id }));
       setProxyPlayerId("");
       setBonusPlayerId(remoteRoom.players[0]?.id ?? "");
       setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
@@ -648,7 +655,7 @@ function App() {
       setInviteShareReady(true);
       setLauncherMode("launch");
       setShowLauncher(false);
-      setTab("home");
+      setTab(isHost ? "home" : "bet");
       showToast(t("ルームを開きました。", "Room opened."));
     } catch (error) {
       const message = getFirebaseIssueCopy(error, t);
