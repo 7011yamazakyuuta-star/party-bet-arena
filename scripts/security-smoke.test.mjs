@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createBlankRoom } from "../src/lib/sample.ts";
 import { createBet, getEffectiveMultiplier, settleRoom, validateBet } from "../src/lib/calculations.ts";
-import { loadRoom, normalizeRoom, saveRoom } from "../src/lib/storage.ts";
+import { loadRoom, loadRoomSummaries, normalizeRoom, saveRoom } from "../src/lib/storage.ts";
 
 function bettingRoom() {
   const room = createBlankRoom("security test", "host-uid");
@@ -38,6 +38,31 @@ test("empty live Firebase collections do not inherit demo players or bets", () =
   assert.equal(restored.players.length, 0);
   assert.equal(restored.currentRace.bets.length, 0);
   assert.equal(restored.contestants.length, room.contestants.length);
+});
+
+test("legacy rooms are removed from local launch state", () => {
+  const previousStorage = globalThis.localStorage;
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    const legacy = createBlankRoom("old room", "old-host");
+    delete legacy.schemaVersion;
+    localStorage.setItem("party-bet-arena:room", JSON.stringify(legacy));
+    localStorage.setItem("party-bet-arena:room-summaries", JSON.stringify([
+      { id: legacy.id, name: legacy.name, isDemo: false, updatedAt: Date.now() },
+    ]));
+    assert.equal(loadRoom().isDemo, true);
+    assert.notEqual(localStorage.getItem("party-bet-arena:room"), null);
+    assert.deepEqual(loadRoomSummaries(), []);
+    assert.equal(localStorage.getItem("party-bet-arena:room-summaries"), "[]");
+  } finally {
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
 });
 
 test("synchronized rooms do not retain full records or invite codes in localStorage", () => {

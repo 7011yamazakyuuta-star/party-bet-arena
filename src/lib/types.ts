@@ -103,6 +103,7 @@ export type RaceHistoryEntry = {
 
 export type Room = {
   id: string;
+  schemaVersion: 2;
   hostUid?: string;
   name: string;
   isDemo: boolean;

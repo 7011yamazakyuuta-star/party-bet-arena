@@ -5,7 +5,10 @@ import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebas
 import { get, ref, remove, set } from "firebase/database";
 import { createBlankRoom } from "../src/lib/sample.ts";
 
-const roomId = "SECURITYROOM";
+const roomId = "SECUREABC234";
+const legacyRoomId = "LEGACYROOM12";
+const newRoomId = "SAFEPLAY2345";
+const shortCodeRoomId = "BETGAMEA2345";
 const hostUid = "host-user";
 const playerUid = "player-user";
 const joinCode = "ABCDEFGHJKLMNPQR";
@@ -36,6 +39,16 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
         joinCode,
         joinedAt: room.createdAt,
       });
+      const { schemaVersion: _schemaVersion, ...legacyPayload } = payload;
+      await set(ref(context.database(), `rooms/${legacyRoomId}`), {
+        ...legacyPayload, id: legacyRoomId, joinCode: "2468",
+      });
+      await set(ref(context.database(), `roomMembers/${legacyRoomId}/${hostUid}`), {
+        role: "host", joinCode: "2468", joinedAt: room.createdAt,
+      });
+      await set(ref(context.database(), `roomMembers/${legacyRoomId}/${playerUid}`), {
+        role: "player", joinCode: "2468", joinedAt: room.createdAt,
+      });
     });
 
     const anonymous = environment.unauthenticatedContext().database();
@@ -46,6 +59,30 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
     await assertFails(get(ref(anonymous, `rooms/${roomId}`)));
     await assertFails(get(ref(outsider, `rooms/${roomId}`)));
     await assertSucceeds(get(ref(host, `rooms/${roomId}`)));
+    await assertFails(get(ref(host, `rooms/${legacyRoomId}`)));
+    await assertFails(get(ref(host, `roomMembers/${legacyRoomId}/${hostUid}`)));
+    await assertFails(get(ref(player, `rooms/${legacyRoomId}`)));
+    await assertFails(get(ref(player, `roomMembers/${legacyRoomId}/${playerUid}`)));
+    await assertFails(set(ref(host, `rooms/${legacyRoomId}/name`), "Host cannot revive legacy"));
+    await assertFails(remove(ref(host, `rooms/${legacyRoomId}`)));
+    await assertFails(set(ref(player, `rooms/${legacyRoomId}/players/${playerUid}`), {
+      id: playerUid, uid: playerUid, name: "Legacy", balance: room.startingBalance,
+      isOffline: false, accent: "#3568ff", emoji: "x",
+    }));
+    await assertSucceeds(set(ref(host, `rooms/${newRoomId}`), { ...payload, id: newRoomId }));
+    await assertFails(set(ref(host, `rooms/${shortCodeRoomId}`), {
+      ...payload, id: shortCodeRoomId, joinCode: "2468",
+    }));
+    const { schemaVersion: _version, ...withoutVersion } = payload;
+    await assertFails(set(ref(host, `rooms/${shortCodeRoomId}`), {
+      ...withoutVersion, id: shortCodeRoomId,
+    }));
+    await assertFails(set(ref(host, `rooms/${shortCodeRoomId}`), {
+      ...payload, id: shortCodeRoomId, isDemo: true,
+    }));
+    await assertFails(set(ref(host, `rooms/${shortCodeRoomId}`), {
+      ...payload, id: shortCodeRoomId, hostPin: "1234",
+    }));
     await assertFails(set(ref(player, `roomMembers/${roomId}/${playerUid}`), {
       role: "player", joinCode: "WRONG", joinedAt: Date.now(),
     }));
@@ -89,10 +126,13 @@ test("Realtime Database rules enforce room and player boundaries", async () => {
     await assertFails(remove(ref(player, `rooms/${roomId}/currentRace/bets/${playerUid}`)));
     await assertSucceeds(set(ref(host, `rooms/${roomId}/name`), "Updated by host"));
     await assertFails(set(ref(host, `rooms/${roomId}/hostUid`), "new-host"));
+    await assertFails(set(ref(host, `rooms/${roomId}/schemaVersion`), 1));
+    await assertFails(set(ref(host, `rooms/${roomId}/joinCode`), "2468"));
     assert.equal((await get(ref(host, `rooms/${roomId}/name`))).val(), "Updated by host");
     const fullRoom = (await get(ref(host, `rooms/${roomId}`))).val();
     fullRoom.currentRace.bets[playerUid].multiplier = 9999;
     await assertSucceeds(set(ref(host, `rooms/${roomId}`), { ...fullRoom, name: "Host full save" }));
+    await assertFails(set(ref(host, `rooms/${roomId}/hostPin`), "1234"));
     await assertSucceeds(remove(ref(host, `roomMembers/${roomId}`)));
     await assertSucceeds(remove(ref(host, `rooms/${roomId}`)));
   } finally {

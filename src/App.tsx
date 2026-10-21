@@ -535,6 +535,13 @@ function App() {
       showToast(t("ルームIDと参加コードを入力してください。", "Enter the room ID and join code."));
       return;
     }
+    if (normalizedRoomId !== "DEMO42" && (
+      !/^[A-HJ-NP-Z2-9]{12}$/.test(normalizedRoomId) ||
+      !/^[A-HJ-NP-Z2-9]{16}$/.test(normalizedJoinCode)
+    )) {
+      showToast(t("旧形式のルームは終了しました。新しいルームの招待を受け取ってください。", "Legacy rooms are closed. Ask for a new room invitation."));
+      return;
+    }
     let targetRoom = room;
     let firebaseUid: string | undefined;
 

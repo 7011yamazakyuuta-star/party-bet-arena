@@ -18,6 +18,7 @@ export const defaultContestants: Contestant[] = [
 
 export const createInitialRoom = (): Room => ({
   id: "DEMO42",
+  schemaVersion: 2,
   name: "ランクパーティ",
   isDemo: true,
   joinCode: "2468",

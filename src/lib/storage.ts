@@ -14,6 +14,7 @@ export type LocalSession = {
 
 export type LocalRoomSummary = {
   id: string;
+  schemaVersion: 2;
   name: string;
   isDemo: boolean;
   currentRaceNumber: number;
@@ -91,9 +92,9 @@ export function loadRoomSummaries(): LocalRoomSummary[] {
   try {
     const parsed = JSON.parse(stored) as Partial<LocalRoomSummary>[];
     const summaries = parsed
-      .filter((room): room is LocalRoomSummary => Boolean(room.id && room.name))
-      .map(({ id, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt }) => ({
-        id, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt,
+      .filter((room): room is LocalRoomSummary => Boolean(room.id && room.name && room.schemaVersion === 2))
+      .map(({ id, schemaVersion, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt }) => ({
+        id, schemaVersion, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt,
       }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
     localStorage.setItem(roomSummariesKey, JSON.stringify(summaries));
@@ -114,6 +115,7 @@ export function rememberRoom(room: Room) {
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
   const summary: LocalRoomSummary = {
     id: room.id,
+    schemaVersion: 2,
     name: room.name.trim() || room.id,
     isDemo: room.isDemo,
     currentRaceNumber,
@@ -187,7 +189,10 @@ export function resetLocalRoom() {
 
 export function normalizeRoom(room: Room): Room {
   const fallback = createInitialRoom();
-  const isDemo = room.isDemo ?? room.id === "DEMO42";
+  const isDemo = room.id === "DEMO42";
+  if (!isDemo && room.schemaVersion !== 2) {
+    throw new Error("Unsupported legacy room schema");
+  }
   const emptyIfLive = <T,>(sample: T[]): T[] => isDemo ? sample : [];
   const cleanRoom = { ...room } as Room & { uiMode?: unknown };
   delete cleanRoom.uiMode;
