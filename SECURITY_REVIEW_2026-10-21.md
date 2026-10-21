@@ -20,11 +20,12 @@
 - `npm run test:security`: 3/3 pass.
 - `npm run test:rules:emulator`: 1/1 pass, including denied unauthorized writes and allowed host updates/deletion.
 - `npm audit --omit=dev --audit-level=high`: 0 known runtime dependency vulnerabilities at this check. A full dependency audit still reports 7 development dependency advisories (4 moderate, 3 high); review and update the tooling separately.
-- Live browser end-to-end verification and hosted GitHub Actions results remain pending.
+- GitHub Actions run `39564712421`: build job passed, including type check, security smoke, Realtime Database rules test, and build.
+- Live browser end-to-end verification remains pending.
 
 ## Required before production release
 
-1. Review the PR and hosted CI; test the built site with a fresh room in a browser, including create, join, own bet, host settlement, and logout/revisit behavior.
+1. Review the PR; test the built site with a fresh room in a browser, including create, join, own bet, host settlement, and logout/revisit behavior.
 2. Decide whether to retire old rooms or migrate their player IDs, bet IDs, and short invite codes. Preserve needed data with a verified export/backup first. Do not paste production data into tests.
 3. Publish the new client, verify it is serving, then publish the matching Firebase rules. Recheck all flows and roll back the release if any write is denied unexpectedly.
 4. Configure an abuse strategy: Firebase App Check where supported, usage alerts/quotas, and a backup/restore plan. Anonymous Auth does not provide durable host identity or strong account recovery.
