@@ -18,10 +18,10 @@ export const defaultContestants: Contestant[] = [
 
 export const createInitialRoom = (): Room => ({
   id: "DEMO42",
+  schemaVersion: 2,
   name: "ランクパーティ",
   isDemo: true,
   joinCode: "2468",
-  hostPin: "0000",
   theme: "arena",
   startingBalance: 1000,
   settings: {
@@ -71,8 +71,9 @@ export const createInitialRoom = (): Room => ({
 });
 
 export const createBlankRoom = (name = "ランクパーティ", hostUid?: string): Room => {
-  const roomId = Math.random().toString(36).slice(2, 8).toUpperCase();
-  const joinCode = Math.floor(1000 + Math.random() * 9000).toString();
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const roomId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => alphabet[byte % 32]).join("");
+  const joinCode = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => alphabet[byte % 32]).join("");
   const base = createInitialRoom();
 
   return {

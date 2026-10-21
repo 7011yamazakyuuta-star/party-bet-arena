@@ -1,5 +1,5 @@
 import type { Bet, Player, Room } from "./types";
-import { normalizeRoom } from "./storage";
+import { clearCachedRoom, normalizeRoom } from "./storage";
 
 type SyncCallback = (room: Room) => void;
 type FirebaseRoomPayload = Omit<Room, "players" | "contestants" | "currentRace"> & {
@@ -19,6 +19,7 @@ const firebaseConfig = {
 };
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+let emulatorsConnected = false;
 
 export type FirebaseIssueKind =
   | "anonymous-auth"
@@ -44,16 +45,21 @@ export function getFirebaseIssueKind(error: unknown): FirebaseIssueKind {
 async function getFirebaseServices() {
   if (!isFirebaseConfigured) return null;
 
-  const [{ initializeApp, getApps }, { getDatabase, ref, get, onValue, set, remove }, { getAuth, signInAnonymously }] =
+  const [{ initializeApp, getApps }, { getDatabase, connectDatabaseEmulator, ref, get, onValue, set, remove }, { getAuth, connectAuthEmulator, signInAnonymously }] =
     await Promise.all([import("firebase/app"), import("firebase/database"), import("firebase/auth")]);
 
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db = getDatabase(app);
+  if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" && !emulatorsConnected) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectDatabaseEmulator(db, "127.0.0.1", 9000);
+    emulatorsConnected = true;
+  }
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }
 
-  const db = getDatabase(app);
   return { auth, db, ref, get, onValue, set, remove };
 }
 
@@ -111,6 +117,7 @@ export async function saveFirebaseRoom(room: Room) {
   const hostUid = room.hostUid ?? auth.currentUser?.uid;
   const updatedRoom = { ...room, hostUid, updatedAt: Date.now() };
   await set(ref(db, `rooms/${room.id}`), roomToFirebasePayload(updatedRoom, hostUid));
+  clearCachedRoom(room.id);
   if (hostUid) {
     await set(ref(db, `roomMembers/${room.id}/${hostUid}`), {
       role: "host",
@@ -126,7 +133,9 @@ export async function joinFirebaseRoom(roomId: string, joinCode: string) {
   const services = await getFirebaseServices();
   if (!services?.auth.currentUser) return;
   const uid = services.auth.currentUser.uid;
-  const { db, ref, set } = services;
+  const { db, ref, get, set } = services;
+  const membership = await get(ref(db, `roomMembers/${roomId}/${uid}`));
+  if (membership.exists()) return;
   await set(ref(db, `roomMembers/${roomId}/${uid}`), {
     role: "player",
     joinCode,
@@ -141,6 +150,7 @@ export async function saveFirebasePlayer(roomId: string, player: Player) {
   if (!services) return;
   const { db, ref, set } = services;
   await set(ref(db, `rooms/${roomId}/players/${player.id}`), player);
+  clearCachedRoom(roomId);
 }
 
 export async function saveFirebaseBet(roomId: string, bet: Bet) {
@@ -150,6 +160,7 @@ export async function saveFirebaseBet(roomId: string, bet: Bet) {
   if (!services) return;
   const { db, ref, set } = services;
   await set(ref(db, `rooms/${roomId}/currentRace/bets/${bet.id}`), bet);
+  clearCachedRoom(roomId);
 }
 
 export async function deleteFirebaseRoom(roomId: string) {

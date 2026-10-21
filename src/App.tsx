@@ -91,8 +91,7 @@ function buildJoinUrl(room: Room) {
   const url = new URL(window.location.href);
   url.search = "";
   url.hash = "";
-  url.searchParams.set("roomId", room.id);
-  url.searchParams.set("joinCode", room.joinCode);
+  url.hash = new URLSearchParams({ roomId: room.id, joinCode: room.joinCode }).toString();
   return url.toString();
 }
 
@@ -351,7 +350,7 @@ function App() {
     subscribeFirebaseRoom(room.id, (remoteRoom) => {
       if (isRoomDeleted(remoteRoom.id)) return;
       setRoom(remoteRoom);
-      setRoomSummaries(saveRoom(remoteRoom));
+      setRoomSummaries(saveRoom(remoteRoom, false));
     }).then((cleanup) => {
       unsubscribe = cleanup;
     });
@@ -531,8 +530,16 @@ function App() {
 
   async function handleJoinPlayer() {
     const normalizedRoomId = joinRoomId.trim().toUpperCase();
-    if (!normalizedRoomId || !joinCode.trim()) {
+    const normalizedJoinCode = joinCode.trim().toUpperCase();
+    if (!normalizedRoomId || !normalizedJoinCode) {
       showToast(t("ルームIDと参加コードを入力してください。", "Enter the room ID and join code."));
+      return;
+    }
+    if (normalizedRoomId !== "DEMO42" && (
+      !/^[A-HJ-NP-Z2-9]{12}$/.test(normalizedRoomId) ||
+      !/^[A-HJ-NP-Z2-9]{16}$/.test(normalizedJoinCode)
+    )) {
+      showToast(t("旧形式のルームは終了しました。新しいルームの招待を受け取ってください。", "Legacy rooms are closed. Ask for a new room invitation."));
       return;
     }
     let targetRoom = room;
@@ -541,7 +548,7 @@ function App() {
     if (isFirebaseConfigured && normalizedRoomId !== "DEMO42") {
       try {
         firebaseUid = await getFirebaseUid();
-        await joinFirebaseRoom(normalizedRoomId, joinCode.trim());
+        await joinFirebaseRoom(normalizedRoomId, normalizedJoinCode);
         const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
         if (!remoteRoom) {
           showToast(t("ルームが見つかりません。ルームIDを確認してください。", "Room not found. Please check the room ID."));
@@ -561,8 +568,19 @@ function App() {
       return;
     }
 
-    if (normalizedRoomId !== targetRoom.id || joinCode.trim() !== targetRoom.joinCode) {
+    if (normalizedRoomId !== targetRoom.id || normalizedJoinCode !== targetRoom.joinCode) {
       showToast(t("ルームIDまたは参加コードが違います。", "Room ID or join code is incorrect."));
+      return;
+    }
+
+    const existingPlayer = firebaseUid && targetRoom.players.find((player) => player.uid === firebaseUid);
+    if (existingPlayer) {
+      restoreRoomSummary(targetRoom.id);
+      commitRoom(targetRoom, false);
+      setSession((current) => ({ ...current, role: "player", playerId: existingPlayer.id }));
+      setLauncherMode("launch");
+      setShowLauncher(false);
+      setTab("bet");
       return;
     }
 
@@ -573,7 +591,7 @@ function App() {
     }
 
     const player: Player = {
-      id: crypto.randomUUID(),
+      id: firebaseUid ?? crypto.randomUUID(),
       uid: firebaseUid,
       name,
       balance: targetRoom.startingBalance,
@@ -608,7 +626,7 @@ function App() {
   }
 
   async function handleOpenRoom(roomId: string) {
-    if (room.id === roomId) {
+    if (room.id === roomId && (!isFirebaseConfigured || room.isDemo)) {
       setLauncherMode("launch");
       setShowLauncher(false);
       setTab("home");
@@ -621,23 +639,30 @@ function App() {
     }
 
     try {
+      const uid = await getFirebaseUid();
       const remoteRoom = await fetchFirebaseRoom(roomId);
       if (!remoteRoom) {
         showToast(t("ルームが見つかりません。削除済みか、Firebase設定を確認してください。", "Room not found. It may be deleted or Firebase may need setup."));
         return;
       }
+      const isHost = Boolean(uid && remoteRoom.hostUid === uid);
+      const ownPlayer = uid ? remoteRoom.players.find((player) => player.uid === uid) : undefined;
+      if (!isHost && !ownPlayer) {
+        showToast(t("この端末の参加情報が見つかりません。", "No membership for this device was found."));
+        return;
+      }
       restoreRoomSummary(remoteRoom.id);
       commitRoom(remoteRoom, false);
-      setSession((current) => ({ ...current, role: "host", playerId: undefined }));
+      setSession((current) => ({ ...current, role: isHost ? "host" : "player", playerId: isHost ? undefined : ownPlayer?.id }));
       setProxyPlayerId("");
       setBonusPlayerId(remoteRoom.players[0]?.id ?? "");
       setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
       setSelectedPickIds(remoteRoom.contestants[0]?.id ? [remoteRoom.contestants[0].id] : []);
       setResultIds(remoteRoom.currentRace.resultIds ?? []);
-      setInviteShareReady(true);
+      setInviteShareReady(isHost);
       setLauncherMode("launch");
       setShowLauncher(false);
-      setTab("home");
+      setTab(isHost ? "home" : "bet");
       showToast(t("ルームを開きました。", "Room opened."));
     } catch (error) {
       const message = getFirebaseIssueCopy(error, t);

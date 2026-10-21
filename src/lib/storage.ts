@@ -1,4 +1,4 @@
-import { createInitialRoom } from "./sample";
+import { createInitialRoom } from "./sample.ts";
 import type { AppRole, LanguageName, Player, RaceBetResult, Room, ThemeName } from "./types";
 
 const roomKey = "party-bet-arena:room";
@@ -14,8 +14,8 @@ export type LocalSession = {
 
 export type LocalRoomSummary = {
   id: string;
+  schemaVersion: 2;
   name: string;
-  joinCode: string;
   isDemo: boolean;
   currentRaceNumber: number;
   maxRaces: number;
@@ -61,11 +61,28 @@ export function loadRoom() {
   }
 }
 
-export function saveRoom(room: Room) {
+export function saveRoom(room: Room, persistFullRoom = true) {
   const normalized = normalizeRoom(room);
   const next = { ...normalized, updatedAt: Date.now() };
-  localStorage.setItem(roomKey, JSON.stringify(next));
+  if (persistFullRoom) {
+    localStorage.setItem(roomKey, JSON.stringify(next));
+  } else {
+    clearCachedRoom(room.id, room.updatedAt);
+  }
   return rememberRoom(next);
+}
+
+export function clearCachedRoom(roomId: string, confirmedUpdatedAt?: number) {
+  const stored = localStorage.getItem(roomKey);
+  if (!stored) return;
+  try {
+    const cached = JSON.parse(stored) as Partial<Room>;
+    if (cached.id !== roomId) return;
+    if (confirmedUpdatedAt !== undefined && !(Number.isFinite(confirmedUpdatedAt) && (cached.updatedAt ?? Infinity) <= confirmedUpdatedAt)) return;
+    localStorage.removeItem(roomKey);
+  } catch {
+    localStorage.removeItem(roomKey);
+  }
 }
 
 export function loadRoomSummaries(): LocalRoomSummary[] {
@@ -74,9 +91,14 @@ export function loadRoomSummaries(): LocalRoomSummary[] {
 
   try {
     const parsed = JSON.parse(stored) as Partial<LocalRoomSummary>[];
-    return parsed
-      .filter((room): room is LocalRoomSummary => Boolean(room.id && room.name && room.joinCode))
+    const summaries = parsed
+      .filter((room): room is LocalRoomSummary => Boolean(room.id && room.name && room.schemaVersion === 2))
+      .map(({ id, schemaVersion, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt }) => ({
+        id, schemaVersion, name, isDemo, currentRaceNumber, maxRaces, status, updatedAt,
+      }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+    localStorage.setItem(roomSummariesKey, JSON.stringify(summaries));
+    return summaries;
   } catch {
     return [];
   }
@@ -93,8 +115,8 @@ export function rememberRoom(room: Room) {
   const currentRaceNumber = Number(room.currentRace.title.match(/\d+/)?.[0] ?? room.raceHistory.length + 1);
   const summary: LocalRoomSummary = {
     id: room.id,
+    schemaVersion: 2,
     name: room.name.trim() || room.id,
-    joinCode: room.joinCode,
     isDemo: room.isDemo,
     currentRaceNumber,
     maxRaces: room.settings.maxRaces,
@@ -167,13 +189,19 @@ export function resetLocalRoom() {
 
 export function normalizeRoom(room: Room): Room {
   const fallback = createInitialRoom();
+  const isDemo = room.id === "DEMO42";
+  if (!isDemo && room.schemaVersion !== 2) {
+    throw new Error("Unsupported legacy room schema");
+  }
+  const emptyIfLive = <T,>(sample: T[]): T[] => isDemo ? sample : [];
   const cleanRoom = { ...room } as Room & { uiMode?: unknown };
   delete cleanRoom.uiMode;
+  delete (cleanRoom as Room & { hostPin?: string }).hostPin;
 
   return {
     ...fallback,
     ...cleanRoom,
-    isDemo: room.isDemo ?? room.id === "DEMO42",
+    isDemo,
     theme: validThemes.has(room.theme) ? room.theme : fallback.theme,
     settings: {
       ...fallback.settings,
@@ -185,14 +213,14 @@ export function normalizeRoom(room: Room): Room {
       allowDebt: room.settings?.allowDebt ?? fallback.settings.allowDebt,
       specialBonus: Math.max(0, Math.floor(room.settings?.specialBonus ?? fallback.settings.specialBonus)),
     },
-    players: normalizeList<Player>((room as unknown as { players?: unknown }).players, fallback.players).map((player, index) => {
+    players: normalizeList<Player>((room as unknown as { players?: unknown }).players, emptyIfLive(fallback.players)).map((player, index) => {
       const { skillRating: _legacySkillRating, ...cleanPlayer } = player as Player & { skillRating?: number };
       return {
         ...cleanPlayer,
         emoji: player.emoji || fallbackEmojis[index % fallbackEmojis.length],
       };
     }),
-    contestants: normalizeList((room as unknown as { contestants?: unknown }).contestants, fallback.contestants).map((contestant, index) => {
+    contestants: normalizeList((room as unknown as { contestants?: unknown }).contestants, emptyIfLive(fallback.contestants)).map((contestant, index) => {
       const cleanContestant = { ...contestant } as typeof contestant & { strengthRating?: unknown };
       delete cleanContestant.strengthRating;
       return {
@@ -207,7 +235,7 @@ export function normalizeRoom(room: Room): Room {
       ...room.currentRace,
       startedAt: room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
       endsAt: room.currentRace?.endsAt ?? room.currentRace?.startedAt ?? fallback.currentRace.startedAt,
-      bets: normalizeList((room.currentRace as unknown as { bets?: unknown } | undefined)?.bets, fallback.currentRace.bets).map((bet) => ({
+      bets: normalizeList((room.currentRace as unknown as { bets?: unknown } | undefined)?.bets, emptyIfLive(fallback.currentRace.bets)).map((bet) => ({
         ...bet,
         contestantIds: bet.contestantIds?.length ? bet.contestantIds : [bet.contestantId],
       })),

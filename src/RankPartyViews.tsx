@@ -141,16 +141,26 @@ export function RankLaunchView(props: {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const roomId = params.get("roomId") ?? params.get("room") ?? params.get("id");
-    const code = params.get("joinCode") ?? params.get("code");
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const roomId = hashParams.get("roomId") ?? hashParams.get("room") ?? hashParams.get("id") ?? params.get("roomId") ?? params.get("room") ?? params.get("id");
+    const code = hashParams.get("joinCode") ?? hashParams.get("code") ?? params.get("joinCode") ?? params.get("code");
     if (!roomId || !code) return;
     props.setJoinRoomId(roomId.toUpperCase());
-    props.setJoinCode(code);
+    props.setJoinCode(code.toUpperCase());
     setShowJoin(true);
+    for (const key of ["roomId", "room", "id", "joinCode", "code"]) {
+      params.delete(key);
+      hashParams.delete(key);
+    }
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${params.size ? `?${params}` : ""}${hashParams.size ? `#${hashParams}` : ""}`);
   }, [props.setJoinCode, props.setJoinRoomId]);
 
   const readQrImage = async (file?: File) => {
     if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      setQrStatus(props.t("10MB以下の画像を選んでください。", "Choose an image smaller than 10 MB."));
+      return;
+    }
 
     type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => {
       detect: (source: ImageBitmap) => Promise<Array<{ rawValue: string }>>;
@@ -170,17 +180,18 @@ export function RankLaunchView(props: {
 
       const raw = result.rawValue.trim();
       const parsedUrl = new URL(raw, window.location.href);
-      let roomId = parsedUrl.searchParams.get("roomId") ?? parsedUrl.searchParams.get("room") ?? parsedUrl.searchParams.get("id") ?? "";
-      let code = parsedUrl.searchParams.get("joinCode") ?? parsedUrl.searchParams.get("code") ?? "";
+      const hashParams = new URLSearchParams(parsedUrl.hash.slice(1));
+      let roomId = hashParams.get("roomId") ?? hashParams.get("room") ?? hashParams.get("id") ?? parsedUrl.searchParams.get("roomId") ?? parsedUrl.searchParams.get("room") ?? parsedUrl.searchParams.get("id") ?? "";
+      let code = hashParams.get("joinCode") ?? hashParams.get("code") ?? parsedUrl.searchParams.get("joinCode") ?? parsedUrl.searchParams.get("code") ?? "";
       if (!roomId || !code) {
-        const match = raw.match(/([A-Z0-9]{4,10})[^A-Z0-9]+([0-9]{4,8})/i);
+        const match = raw.match(/([A-Z0-9]{4,16})[^A-Z0-9]+([A-Z0-9]{4,32})/i);
         roomId ||= match?.[1] ?? "";
         code ||= match?.[2] ?? "";
       }
       if (!roomId || !code) throw new Error("Room details not found");
 
       props.setJoinRoomId(roomId.toUpperCase());
-      props.setJoinCode(code);
+      props.setJoinCode(code.toUpperCase());
       setQrStatus(props.t("ルーム情報を読み取りました。", "Room details scanned."));
     } catch {
       setQrStatus(props.t("QRコードを読み取れませんでした。IDとコードを確認してください。", "Could not read that QR code. Check the ID and code."));
@@ -217,7 +228,7 @@ export function RankLaunchView(props: {
           <h2>{props.t("参加情報", "Join details")}</h2>
           <label>
             <span>{props.t("表示名", "Display name")}</span>
-            <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder={props.t("例：ゆうた", "Example: Yuta")} />
+            <input value={props.joinName} maxLength={40} onChange={(event) => props.setJoinName(event.target.value)} placeholder={props.t("例：ゆうた", "Example: Yuta")} />
           </label>
           <label>
             <span>{props.t("ルームID", "Room ID")}</span>
@@ -225,7 +236,7 @@ export function RankLaunchView(props: {
           </label>
           <label>
             <span>{props.t("参加コード", "Join code")}</span>
-            <input inputMode="numeric" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value)} placeholder="2468" />
+            <input autoCapitalize="characters" value={props.joinCode} onChange={(event) => props.setJoinCode(event.target.value.toUpperCase())} placeholder="招待コード" />
           </label>
           <input
             ref={qrInputRef}
