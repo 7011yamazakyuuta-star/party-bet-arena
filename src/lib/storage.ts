@@ -169,6 +169,7 @@ export function normalizeRoom(room: Room): Room {
   const fallback = createInitialRoom();
   const cleanRoom = { ...room } as Room & { uiMode?: unknown };
   delete cleanRoom.uiMode;
+  delete (cleanRoom as Room & { hostPin?: string }).hostPin;
 
   return {
     ...fallback,

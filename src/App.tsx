@@ -91,8 +91,7 @@ function buildJoinUrl(room: Room) {
   const url = new URL(window.location.href);
   url.search = "";
   url.hash = "";
-  url.searchParams.set("roomId", room.id);
-  url.searchParams.set("joinCode", room.joinCode);
+  url.hash = new URLSearchParams({ roomId: room.id, joinCode: room.joinCode }).toString();
   return url.toString();
 }
 
@@ -531,7 +530,8 @@ function App() {
 
   async function handleJoinPlayer() {
     const normalizedRoomId = joinRoomId.trim().toUpperCase();
-    if (!normalizedRoomId || !joinCode.trim()) {
+    const normalizedJoinCode = joinCode.trim().toUpperCase();
+    if (!normalizedRoomId || !normalizedJoinCode) {
       showToast(t("ルームIDと参加コードを入力してください。", "Enter the room ID and join code."));
       return;
     }
@@ -541,7 +541,7 @@ function App() {
     if (isFirebaseConfigured && normalizedRoomId !== "DEMO42") {
       try {
         firebaseUid = await getFirebaseUid();
-        await joinFirebaseRoom(normalizedRoomId, joinCode.trim());
+        await joinFirebaseRoom(normalizedRoomId, normalizedJoinCode);
         const remoteRoom = await fetchFirebaseRoom(normalizedRoomId);
         if (!remoteRoom) {
           showToast(t("ルームが見つかりません。ルームIDを確認してください。", "Room not found. Please check the room ID."));
@@ -561,8 +561,19 @@ function App() {
       return;
     }
 
-    if (normalizedRoomId !== targetRoom.id || joinCode.trim() !== targetRoom.joinCode) {
+    if (normalizedRoomId !== targetRoom.id || normalizedJoinCode !== targetRoom.joinCode) {
       showToast(t("ルームIDまたは参加コードが違います。", "Room ID or join code is incorrect."));
+      return;
+    }
+
+    const existingPlayer = firebaseUid && targetRoom.players.find((player) => player.uid === firebaseUid);
+    if (existingPlayer) {
+      restoreRoomSummary(targetRoom.id);
+      commitRoom(targetRoom, false);
+      setSession((current) => ({ ...current, role: "player", playerId: existingPlayer.id }));
+      setLauncherMode("launch");
+      setShowLauncher(false);
+      setTab("bet");
       return;
     }
 
@@ -573,7 +584,7 @@ function App() {
     }
 
     const player: Player = {
-      id: crypto.randomUUID(),
+      id: firebaseUid ?? crypto.randomUUID(),
       uid: firebaseUid,
       name,
       balance: targetRoom.startingBalance,

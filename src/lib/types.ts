@@ -107,7 +107,6 @@ export type Room = {
   name: string;
   isDemo: boolean;
   joinCode: string;
-  hostPin: string;
   theme: ThemeName;
   startingBalance: number;
   settings: RoomSettings;

@@ -126,7 +126,9 @@ export async function joinFirebaseRoom(roomId: string, joinCode: string) {
   const services = await getFirebaseServices();
   if (!services?.auth.currentUser) return;
   const uid = services.auth.currentUser.uid;
-  const { db, ref, set } = services;
+  const { db, ref, get, set } = services;
+  const membership = await get(ref(db, `roomMembers/${roomId}/${uid}`));
+  if (membership.exists()) return;
   await set(ref(db, `roomMembers/${roomId}/${uid}`), {
     role: "player",
     joinCode,

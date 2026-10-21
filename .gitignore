@@ -6,6 +6,9 @@ dist
 .env.*
 !.env.example
 npm-debug.log*
+firebase-debug.log
+database-debug.log
+ui-debug.log
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*

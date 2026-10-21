@@ -27,6 +27,18 @@ jobs:
       - name: Type check
         run: npm run lint
 
+      - name: Security smoke tests
+        run: npm run test:security
+
+      - name: Setup Java for Firebase emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Realtime Database rules tests
+        run: npm run test:rules:emulator
+
       - name: Build
         run: npm run build
         env:

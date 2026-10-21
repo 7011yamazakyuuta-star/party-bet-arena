@@ -112,7 +112,9 @@ export function getEffectiveMultiplier(room: Room, type: BetType, contestants: C
 
   const targetIds = contestants.map((contestant) => contestant.id);
   const targetKey = getOutcomeKey(type, targetIds);
-  const typeBets = room.currentRace.bets.filter((bet) => bet.type === type);
+  const typeBets = room.currentRace.bets.filter((bet) =>
+    bet.type === type && Number.isSafeInteger(bet.amount) && bet.amount > 0 && bet.amount <= 1_000_000_000
+  );
   const pool = typeBets.reduce((sum, bet) => sum + bet.amount, 0);
   if (pool <= 0) return baseMultiplier;
 
@@ -148,7 +150,7 @@ export function getReservedAmount(room: Room, playerId: string) {
   if (room.currentRace.status === "settled") return 0;
 
   return room.currentRace.bets
-    .filter((bet) => bet.playerId === playerId)
+    .filter((bet) => bet.playerId === playerId && Number.isSafeInteger(bet.amount) && bet.amount > 0 && bet.amount <= 1_000_000_000)
     .reduce((sum, bet) => sum + bet.amount, 0);
 }
 
@@ -169,7 +171,10 @@ export function getPotentialPayout(room: Room, draft: DraftBet) {
 
 export function validateBet(room: Room, draft: DraftBet) {
   if (room.currentRace.status !== "betting") return "BET受付中ではありません。";
-  if (!draft.playerId) return "プレイヤーを選んでください。";
+  if (!draft.playerId || !getPlayer(room, draft.playerId)) return "プレイヤーを選んでください。";
+  if (draft.placedBy === "self" && room.currentRace.bets.some((bet) => bet.playerId === draft.playerId)) {
+    return "このレースではすでにBET済みです。";
+  }
   if (!draft.contestantIds.length) return "賭け先を選んでください。";
   if (draft.contestantIds.length !== requiredPickCount(draft.type)) {
     return `${requiredPickCount(draft.type)}つの順位を選んでください。`;
@@ -177,7 +182,10 @@ export function validateBet(room: Room, draft: DraftBet) {
   if (new Set(draft.contestantIds).size !== draft.contestantIds.length) {
     return "同じ対象を複数順位に選ぶことはできません。";
   }
-  if (!Number.isFinite(draft.amount) || draft.amount <= 0) return "BET額を入力してください。";
+  if (draft.contestantIds.some((id) => !getContestant(room, id))) return "賭け先を選んでください。";
+  if (!Number.isSafeInteger(draft.amount) || draft.amount <= 0 || draft.amount > 1_000_000_000) {
+    return "BET額を入力してください。";
+  }
   if (!room.settings.allowDebt && draft.amount > getAvailableBalance(room, draft.playerId)) {
     return "利用可能コインを超えています。";
   }
@@ -186,14 +194,13 @@ export function validateBet(room: Room, draft: DraftBet) {
 
 export function createBet(draft: DraftBet): Bet {
   return {
-    id: crypto.randomUUID(),
+    id: draft.placedBy === "self" ? draft.playerId : crypto.randomUUID(),
     uid: draft.uid,
     playerId: draft.playerId,
     contestantId: draft.contestantIds[0],
     contestantIds: draft.contestantIds,
     type: draft.type,
-    amount: Math.floor(draft.amount),
-    multiplier: Number(draft.multiplier.toFixed(2)),
+    amount: draft.amount,
     placedBy: draft.placedBy,
     createdAt: Date.now(),
   };
@@ -228,14 +235,17 @@ export function settleRoom(room: Room, resultIds: string[]) {
       const contestants = getBetPickIds(bet)
         .map((contestantId) => getContestant(room, contestantId))
         .filter((contestant): contestant is Contestant => Boolean(contestant));
-      if (contestants.length !== requiredPickCount(bet.type)) {
+      if (
+        !Number.isSafeInteger(bet.amount) || bet.amount <= 0 || bet.amount > 1_000_000_000 ||
+        contestants.length !== requiredPickCount(bet.type)
+      ) {
         betResults.push({
           id: bet.id,
           playerId: bet.playerId,
           contestantIds: pickIds,
           type: bet.type,
           amount: bet.amount,
-          multiplier: bet.multiplier ?? 0,
+          multiplier: 0,
           payout: 0,
           delta: 0,
           hit: false,
@@ -244,6 +254,7 @@ export function settleRoom(room: Room, resultIds: string[]) {
         });
         return current;
       }
+      const multiplier = getEffectiveMultiplier(room, bet.type, contestants);
       const afterStake = current - bet.amount;
       summary.stake += bet.amount;
       const hit = isBetHit(bet.type, pickIds, resultIds);
@@ -255,7 +266,7 @@ export function settleRoom(room: Room, resultIds: string[]) {
           contestantIds: pickIds,
           type: bet.type,
           amount: bet.amount,
-          multiplier: bet.multiplier ?? getEffectiveMultiplier(room, bet.type, contestants),
+          multiplier,
           payout: 0,
           delta: -bet.amount,
           hit: false,
@@ -265,7 +276,6 @@ export function settleRoom(room: Room, resultIds: string[]) {
         return room.settings.allowDebt ? afterStake : Math.max(0, afterStake);
       }
 
-      const multiplier = bet.multiplier ?? getEffectiveMultiplier(room, bet.type, contestants);
       const payout = Math.floor(bet.amount * multiplier);
       summary.payout += payout;
       summary.hits += 1;
