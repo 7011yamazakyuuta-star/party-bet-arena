@@ -619,7 +619,7 @@ function App() {
   }
 
   async function handleOpenRoom(roomId: string) {
-    if (room.id === roomId) {
+    if (room.id === roomId && (!isFirebaseConfigured || room.isDemo)) {
       setLauncherMode("launch");
       setShowLauncher(false);
       setTab("home");
@@ -652,7 +652,7 @@ function App() {
       setSelectedContestantId(remoteRoom.contestants[0]?.id ?? "");
       setSelectedPickIds(remoteRoom.contestants[0]?.id ? [remoteRoom.contestants[0].id] : []);
       setResultIds(remoteRoom.currentRace.resultIds ?? []);
-      setInviteShareReady(true);
+      setInviteShareReady(isHost);
       setLauncherMode("launch");
       setShowLauncher(false);
       setTab(isHost ? "home" : "bet");
